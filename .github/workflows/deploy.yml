@@ -1,0 +1,15 @@
+name: Deploy
+
+on:
+  workflow_dispatch:
+
+jobs:
+  deployment-placeholder:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Phase 1 deployment notice
+        run: |
+          echo "Deployment is not part of Phase 1."
+          echo "This workflow remains a manual placeholder until later phases."

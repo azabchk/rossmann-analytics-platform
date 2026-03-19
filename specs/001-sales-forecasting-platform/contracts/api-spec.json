@@ -1,0 +1,1083 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Sales Forecasting Platform API",
+    "description": "REST API for accessing KPI marts and forecast results for the Sales Forecasting Platform. All endpoints require authentication via Supabase JWT.",
+    "version": "1.0.0",
+    "contact": {
+      "name": "API Support"
+    }
+  },
+  "servers": [
+    {
+      "url": "/api/v1",
+      "description": "Production API server"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "Supabase JWT token from authentication"
+      }
+    },
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string",
+            "description": "Error message"
+          },
+          "code": {
+            "type": "string",
+            "description": "Error code for programmatic handling"
+          },
+          "details": {
+            "type": "object",
+            "description": "Additional error details"
+          }
+        }
+      }
+    },
+    "Store": {
+      "type": "object",
+      "properties": {
+        "store_id": {
+          "type": "integer",
+          "description": "Unique store identifier"
+        },
+        "store_type": {
+          "type": "string",
+          "enum": ["A", "B", "C", "D"],
+          "description": "Store type category"
+        },
+        "assortment": {
+          "type": "string",
+          "enum": ["a", "b", "c"],
+          "description": "Assortment level"
+        },
+        "competition_distance": {
+          "type": "integer",
+          "description": "Distance to nearest competitor in meters"
+        }
+      },
+      "required": ["store_id", "store_type", "assortment", "competition_distance"]
+    },
+    "SalesRecord": {
+      "type": "object",
+      "properties": {
+        "date": {
+          "type": "string",
+          "format": "date",
+          "description": "Sales date"
+        },
+        "sales": {
+          "type": "integer",
+          "description": "Sales amount"
+        },
+        "customers": {
+          "type": "integer",
+          "nullable": true,
+          "description": "Number of customers"
+        },
+        "open": {
+          "type": "boolean",
+          "description": "Whether store was open"
+        },
+        "promo": {
+          "type": "boolean",
+          "description": "Whether promotion was active"
+        },
+        "state_holiday": {
+          "type": "string",
+          "nullable": true,
+          "description": "State holiday indicator"
+        },
+        "school_holiday": {
+          "type": "boolean",
+          "description": "Whether it was a school holiday"
+        }
+      }
+    },
+    "DailyKPI": {
+      "type": "object",
+      "properties": {
+        "date": {
+          "type": "string",
+          "format": "date"
+        },
+        "total_sales": {
+          "type": "integer"
+        },
+        "avg_customers": {
+          "type": "number",
+          "format": "float"
+        },
+        "promo_days": {
+          "type": "integer"
+        },
+        "holiday_days": {
+          "type": "integer"
+        },
+        "is_weekend": {
+          "type": "boolean"
+        }
+      }
+    },
+    "WeeklyKPI": {
+      "type": "object",
+      "properties": {
+        "year": {
+          "type": "integer"
+        },
+        "week": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 53
+        },
+        "total_sales": {
+          "type": "integer"
+        },
+        "avg_daily_sales": {
+          "type": "number",
+          "format": "float"
+        },
+        "max_daily_sales": {
+          "type": "integer"
+        },
+        "min_daily_sales": {
+          "type": "integer"
+        },
+        "promo_days": {
+          "type": "integer"
+        },
+        "yoy_growth_rate": {
+          "type": "number",
+          "format": "float",
+          "nullable": true
+        }
+      }
+    },
+    "MonthlyKPI": {
+      "type": "object",
+      "properties": {
+        "year": {
+          "type": "integer"
+        },
+        "month": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 12
+        },
+        "total_sales": {
+          "type": "integer"
+        },
+        "avg_daily_sales": {
+          "type": "number",
+          "format": "float"
+        },
+        "promo_uplift_pct": {
+          "type": "number",
+          "format": "float",
+          "nullable": true
+        },
+        "holiday_effect_pct": {
+          "type": "number",
+          "format": "float",
+          "nullable": true
+        },
+        "yoy_growth_rate": {
+          "type": "number",
+          "format": "float",
+          "nullable": true
+        }
+      }
+    },
+    "ForecastResult": {
+      "type": "object",
+      "properties": {
+        "forecast_date": {
+          "type": "string",
+          "format": "date",
+          "description": "Date of forecast"
+        },
+        "predicted_sales": {
+          "type": "number",
+          "format": "float",
+          "description": "Predicted sales amount"
+        },
+        "confidence_lower": {
+          "type": "number",
+          "format": "float",
+          "description": "Lower bound of confidence interval"
+        },
+        "confidence_upper": {
+          "type": "number",
+          "format": "float",
+          "description": "Upper bound of confidence interval"
+        }
+      }
+    },
+    "ForecastRequest": {
+      "type": "object",
+      "required": ["store_id", "weeks"],
+      "properties": {
+        "store_id": {
+          "type": "integer",
+          "description": "Store to forecast",
+          "minimum": 1
+        },
+        "weeks": {
+          "type": "integer",
+          "description": "Number of weeks to forecast",
+          "minimum": 1,
+          "maximum": 6,
+          "default": 6
+        },
+        "include_confidence": {
+          "type": "boolean",
+          "description": "Whether to include confidence intervals",
+          "default": true
+        }
+      }
+    },
+    "ForecastResponse": {
+      "type": "object",
+      "required": ["forecast_id", "store_id", "forecasts", "model_info"],
+      "properties": {
+        "forecast_id": {
+          "type": "string",
+          "description": "Unique forecast identifier"
+        },
+        "store_id": {
+          "type": "integer"
+        },
+        "forecasts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/ForecastResult"
+          }
+        },
+        "model_info": {
+          "type": "object",
+          "properties": {
+            "model_id": {
+              "type": "string"
+            },
+            "model_version": {
+              "type": "string"
+            },
+            "model_type": {
+              "type": "string",
+              "enum": ["prophet", "xgboost", "ensemble"]
+            },
+            "mape": {
+              "type": "number",
+              "format": "float",
+              "description": "Mean Absolute Percentage Error"
+            },
+            "rmse": {
+              "type": "number",
+              "format": "float",
+              "description": "Root Mean Squared Error"
+            }
+          }
+        }
+      }
+    },
+    "StoreComparison": {
+      "type": "object",
+      "properties": {
+        "store_id": {
+          "type": "integer"
+        },
+        "store_type": {
+          "type": "string"
+        },
+        "total_sales": {
+          "type": "integer"
+        },
+        "rank_by_type": {
+          "type": "integer"
+        },
+        "rank_overall": {
+          "type": "integer"
+        },
+        "percentile_by_type": {
+          "type": "integer"
+        }
+      }
+    },
+    "PaginatedResponse": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "type": "array",
+          "description": "Array of results"
+        },
+        "pagination": {
+          "type": "object",
+          "properties": {
+            "page": {
+              "type": "integer"
+            },
+            "page_size": {
+              "type": "integer"
+            },
+            "total_count": {
+              "type": "integer"
+            },
+            "total_pages": {
+              "type": "integer"
+            },
+            "has_next": {
+              "type": "boolean"
+            },
+            "has_previous": {
+              "type": "boolean"
+            }
+        }
+      }
+    }
+  },
+  "paths": {
+    "/stores": {
+      "get": {
+        "summary": "List all stores",
+        "description": "Returns a list of stores that the authenticated user has access to",
+        "tags": ["Stores"],
+        "security": [{"bearerAuth": []}],
+        "parameters": [
+          {
+            "name": "store_type",
+            "in": "query",
+            "description": "Filter by store type",
+            "schema": {
+              "type": "string",
+              "enum": ["A", "B", "C", "D"]
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "description": "Page number for pagination",
+            "schema": {
+              "type": "integer",
+              "default": 1,
+              "minimum": 1
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "description": "Number of results per page",
+            "schema": {
+              "type": "integer",
+              "default": 50,
+              "minimum": 1,
+              "maximum": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginatedResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - invalid or missing JWT",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/stores/{store_id}": {
+      "get": {
+        "summary": "Get store details",
+        "description": "Returns detailed information about a specific store",
+        "tags": ["Stores"],
+        "security": [{"bearerAuth": []}],
+        "parameters": [
+          {
+            "name": "store_id",
+            "in": "path",
+            "required": true,
+            "description": "Store identifier",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Store"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - no access to this store",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Store not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/sales": {
+      "get": {
+        "summary": "Query sales records",
+        "description": "Returns historical sales data for authorized stores with filtering options",
+        "tags": ["Sales"],
+        "security": [{"bearerAuth": []}],
+        "parameters": [
+          {
+            "name": "store_id",
+            "in": "query",
+            "description": "Filter by store",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "start_date",
+            "in": "query",
+            "description": "Start date (YYYY-MM-DD)",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "end_date",
+            "in": "query",
+            "description": "End date (YYYY-MM-DD)",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "aggregation",
+            "in": "query",
+            "description": "Aggregation level",
+            "schema": {
+              "type": "string",
+              "enum": ["daily", "weekly", "monthly"],
+              "default": "daily"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 1,
+              "minimum": 1
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 50,
+              "minimum": 1,
+              "maximum": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginatedResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - invalid parameters",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/kpis/daily": {
+      "get": {
+        "summary": "Get daily KPIs",
+        "description": "Returns pre-aggregated daily KPIs for performance analysis",
+        "tags": ["KPIs"],
+        "security": [{"bearerAuth": []}],
+        "parameters": [
+          {
+            "name": "store_id",
+            "in": "query",
+            "required": true,
+            "description": "Store identifier",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "start_date",
+            "in": "query",
+            "description": "Start date",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "end_date",
+            "in": "query",
+            "description": "End date",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DailyKPI"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - no access to store",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/kpis/weekly": {
+      "get": {
+        "summary": "Get weekly KPIs",
+        "description": "Returns pre-aggregated weekly KPIs for trend analysis",
+        "tags": ["KPIs"],
+        "security": [{"bearerAuth": []}],
+        "parameters": [
+          {
+            "name": "store_id",
+            "in": "query",
+            "required": true,
+            "description": "Store identifier",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "start_year",
+            "in": "query",
+            "description": "Start year",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "end_year",
+            "in": "query",
+            "description": "End year",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/WeeklyKPI"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/kpis/monthly": {
+      "get": {
+        "summary": "Get monthly KPIs",
+        "description": "Returns pre-aggregated monthly KPIs for seasonality analysis",
+        "tags": ["KPIs"],
+        "security": [{"bearerAuth": []}],
+        "parameters": [
+          {
+            "name": "store_id",
+            "in": "query",
+            "required": true,
+            "description": "Store identifier",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "start_year",
+            "in": "query",
+            "description": "Start year",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "end_year",
+            "in": "query",
+            "description": "End year",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/MonthlyKPI"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/forecasts": {
+      "post": {
+        "summary": "Generate sales forecast",
+        "description": "Generates a sales forecast for the specified store and time horizon",
+        "tags": ["Forecasts"],
+        "security": [{"bearerAuth": []}],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ForecastRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Forecast generated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForecastResponse"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Forecast accepted for processing (async mode)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "forecast_id": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": ["pending", "processing"]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - invalid parameters or insufficient data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - no access to store",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/forecasts/{forecast_id}": {
+      "get": {
+        "summary": "Get forecast result",
+        "description": "Retrieves a previously generated forecast",
+        "tags": ["Forecasts"],
+        "security": [{"bearerAuth": []}],
+        "parameters": [
+          {
+            "name": "forecast_id",
+            "in": "path",
+            "required": true,
+            "description": "Forecast identifier",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForecastResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Forecast not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/comparison": {
+      "get": {
+        "summary": "Compare store performance",
+        "description": "Returns performance comparison across all accessible stores for a given period",
+        "tags": ["Comparison"],
+        "security": [{"bearerAuth": []}],
+        "parameters": [
+          {
+            "name": "period_start",
+            "in": "query",
+            "required": true,
+            "description": "Start date of comparison period",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "period_end",
+            "in": "query",
+            "required": true,
+            "description": "End date of comparison period",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "store_type",
+            "in": "query",
+            "description": "Filter by store type",
+            "schema": {
+              "type": "string",
+              "enum": ["A", "B", "C", "D"]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/StoreComparison"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - invalid period",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "summary": "Health check",
+        "description": "Returns system health status (no authentication required)",
+        "tags": ["System"],
+        "responses": {
+          "200": {
+            "description": "System healthy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": ["healthy", "degraded", "unhealthy"]
+                    },
+                    "version": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/data-quality": {
+      "get": {
+        "summary": "Get data quality report",
+        "description": "Returns data quality metrics for monitoring",
+        "tags": ["System"],
+        "security": [{"bearerAuth": []}],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "tables": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "table_name": {
+                            "type": "string"
+                          },
+                          "total_records": {
+                            "type": "integer"
+                          },
+                          "missing_values": {
+                            "type": "integer"
+                          },
+                          "last_validated": {
+                            "type": "string",
+                            "format": "date-time"
+                          }
+                        }
+                      }
+                    }
+                    },
+                    "overall_status": {
+                      "type": "string",
+                      "enum": ["good", "warning", "error"]
+                    },
+                    "last_updated": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  }
+                }
+              }
+            }
+        }
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "Stores",
+      "description": "Store management and information"
+    },
+    {
+      "name": "Sales",
+      "description": "Historical sales data queries"
+    },
+    {
+      "name": "KPIs",
+      "description": "Key Performance Indicators marts"
+    },
+    {
+      "name": "Forecasts",
+      "description": "Sales forecasting functionality"
+    },
+    {
+      "name": "Comparison",
+      "description": "Store performance comparison"
+    },
+    {
+      "name": "System",
+      "description": "System health and monitoring"
+    }
+  ]
+}

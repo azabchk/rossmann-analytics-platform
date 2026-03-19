@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - "001-*"
+  pull_request:
+
+jobs:
+  validate-foundation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Validate Python syntax
+        run: python -m compileall backend/src backend/tests data/src ml/src
+
+      - name: Validate JSON and TOML metadata
+        run: |
+          python - <<'PY'
+          import json
+          import tomllib
+          from pathlib import Path
+
+          json.loads(Path("frontend/package.json").read_text())
+          tomllib.loads(Path("backend/pyproject.toml").read_text())
+          PY
+
+      - name: Verify required planning artifacts
+        run: |
+          test -f docs/ARCHITECTURE_DETAILED.md
+          test -f specs/001-sales-forecasting-platform/plan.md
+          test -f specs/001-sales-forecasting-platform/tasks.md
