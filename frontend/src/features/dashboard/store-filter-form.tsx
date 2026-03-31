@@ -40,55 +40,69 @@ export default function StoreFilterForm({
   }
 
   function handleQuickDateRange(days: number): void {
-    const end = new Date();
-    const start = new Date();
+    const end = endDate ? new Date(`${endDate}T00:00:00`) : new Date();
+    const start = new Date(end);
     start.setDate(start.getDate() - days);
     onDateChange(start.toISOString().split("T")[0], end.toISOString().split("T")[0]);
   }
 
   return (
-    <div className="store-filter-form">
-      <div className="filter-section">
-        <label htmlFor="store-select">Store</label>
-        <select
-          id="store-select"
-          value={selectedStoreId ?? ""}
-          onChange={handleStoreChange}
-          disabled={stores.length === 0}
-        >
-          <option value="">Select a store...</option>
-          {stores.map((store) => (
-            <option key={store.store_id} value={store.store_id}>
-              Store {store.store_id} - Type {store.store_type} -{" "}
-              {store.assortment.toUpperCase()} assortment
-            </option>
-          ))}
-        </select>
+    <section className="store-filter-form" aria-label="Dashboard filters">
+      <div className="section-copy">
+        <p className="eyebrow">Filters</p>
+        <h2>Refine the KPI window</h2>
+        <p>
+          Store access and KPI aggregation are enforced in the backend. This view
+          only controls which approved slice to request.
+        </p>
       </div>
 
-      <div className="filter-section">
-        <label htmlFor="start-date">Start Date</label>
-        <input
-          id="start-date"
-          type="date"
-          value={startDate}
-          onChange={handleStartDateChange}
-          max={endDate}
-        />
+      <div className="filter-grid">
+        <div className="field-group">
+          <label htmlFor="store-select">Store</label>
+          <span className="field-note">Authorized stores only</span>
+          <select
+            id="store-select"
+            value={selectedStoreId ?? ""}
+            onChange={handleStoreChange}
+            disabled={stores.length === 0}
+          >
+            <option value="">Select a store...</option>
+            {stores.map((store) => (
+              <option key={store.store_id} value={store.store_id}>
+                Store {store.store_id} - Type {store.store_type} -{" "}
+                {store.assortment.toUpperCase()} assortment
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="field-group">
+          <label htmlFor="start-date">Start Date</label>
+          <span className="field-note">Lower bound for KPI history</span>
+          <input
+            id="start-date"
+            type="date"
+            value={startDate}
+            onChange={handleStartDateChange}
+            max={endDate}
+          />
+        </div>
+
+        <div className="field-group">
+          <label htmlFor="end-date">End Date</label>
+          <span className="field-note">Upper bound for KPI history</span>
+          <input
+            id="end-date"
+            type="date"
+            value={endDate}
+            onChange={handleEndDateChange}
+            min={startDate}
+          />
+        </div>
       </div>
 
-      <div className="filter-section">
-        <label htmlFor="end-date">End Date</label>
-        <input
-          id="end-date"
-          type="date"
-          value={endDate}
-          onChange={handleEndDateChange}
-          min={startDate}
-        />
-      </div>
-
-      <div className="quick-filters">
+      <div className="quick-filters" aria-label="Quick date filters">
         <button
           type="button"
           onClick={() => handleQuickDateRange(7)}
@@ -118,6 +132,6 @@ export default function StoreFilterForm({
           Last year
         </button>
       </div>
-    </div>
+    </section>
   );
 }

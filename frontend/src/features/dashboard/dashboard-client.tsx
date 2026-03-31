@@ -23,14 +23,20 @@ type DashboardState = {
   requiresAuth: boolean;
 };
 
-function getDefaultStartDate(): string {
-  const date = new Date();
-  date.setDate(date.getDate() - 30);
+const DEFAULT_DATA_END_DATE = "2015-07-31";
+
+function shiftIsoDate(dateString: string, days: number): string {
+  const date = new Date(`${dateString}T00:00:00`);
+  date.setDate(date.getDate() + days);
   return date.toISOString().split("T")[0];
 }
 
+function getDefaultStartDate(): string {
+  return shiftIsoDate(DEFAULT_DATA_END_DATE, -30);
+}
+
 function getDefaultEndDate(): string {
-  return new Date().toISOString().split("T")[0];
+  return DEFAULT_DATA_END_DATE;
 }
 
 function isDailyKpi(kpi: KPIListResponse["kpis"][number]): kpi is DailyKPI {

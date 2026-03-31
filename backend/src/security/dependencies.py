@@ -6,7 +6,7 @@ from src.core.config import Settings
 from src.core.dependencies import get_settings_dependency
 from src.core.errors import AuthenticationError
 from src.security.context import AuthContext, build_auth_context
-from src.security.jwt import decode_access_token
+from src.security.jwt import resolve_access_token_claims
 
 
 def _extract_bearer_token(authorization: str | None) -> str:
@@ -24,7 +24,7 @@ async def require_auth_context(
     settings: Settings = Depends(get_settings_dependency),
 ) -> AuthContext:
     token = _extract_bearer_token(authorization)
-    claims = decode_access_token(token, settings)
+    claims = await resolve_access_token_claims(token, settings)
     try:
         return build_auth_context(claims)
     except ValueError as exc:

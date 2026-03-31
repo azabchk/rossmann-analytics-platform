@@ -13,30 +13,40 @@ export interface SalesHistoryChartProps {
   kpis: DailyKPI[];
 }
 
+function formatCompactCurrency(value: number): string {
+  return new Intl.NumberFormat("en-US", {
+    notation: "compact",
+    maximumFractionDigits: 1,
+  }).format(value);
+}
+
+function formatShortDate(dateString: string): string {
+  return new Date(dateString).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+  });
+}
+
 export default function SalesHistoryChart({
   kpis,
 }: SalesHistoryChartProps): ReactNode {
-  // Sort KPIs by date for proper display
   const sortedKpis = [...kpis].sort((a, b) =>
     a.kpi_date.localeCompare(b.kpi_date)
   );
 
-  // Calculate chart dimensions and scales
   const maxSales = Math.max(...sortedKpis.map((kpi) => kpi.total_sales || 0), 1);
-  const chartHeight = 300;
-  const chartWidth = 800;
-  const padding = 40;
+  const chartHeight = 320;
+  const chartWidth = 860;
+  const padding = 48;
   const barWidth = Math.max(5, (chartWidth - 2 * padding) / sortedKpis.length - 2);
 
-  // Generate bars
   const bars = sortedKpis.map((kpi, index) => {
     const x = padding + index * ((chartWidth - 2 * padding) / sortedKpis.length);
     const barHeight = ((kpi.total_sales || 0) / maxSales) * (chartHeight - 2 * padding);
     const y = chartHeight - padding - barHeight;
 
-    // Color based on whether it's a promo day or holiday
     const isSpecial = kpi.is_promo_day || kpi.has_state_holiday || kpi.has_school_holiday;
-    const barColor = isSpecial ? "#ef4444" : "#3b82f6";
+    const barColor = isSpecial ? "#d97706" : "#0f766e";
 
     return (
       <g key={kpi.kpi_id}>
@@ -48,7 +58,6 @@ export default function SalesHistoryChart({
           fill={barColor}
           rx={2}
         />
-        {/* Add tooltip on hover */}
         <title>
           {kpi.kpi_date}: ${(kpi.total_sales || 0).toLocaleString()} sales,{" "}
           {kpi.total_customers || 0} customers
@@ -59,7 +68,6 @@ export default function SalesHistoryChart({
     );
   });
 
-  // Generate y-axis labels
   const yTicks = 5;
   const yAxisLabels = Array.from({ length: yTicks }, (_, i) => {
     const value = Math.round((maxSales / yTicks) * i);
@@ -71,17 +79,16 @@ export default function SalesHistoryChart({
           y1={y}
           x2={chartWidth - padding}
           y2={y}
-          stroke="#e5e7eb"
+          stroke="rgba(16, 36, 52, 0.12)"
           strokeDasharray="4"
         />
-        <text x={padding - 10} y={y + 4} textAnchor="end" fontSize={12} fill="#6b7280">
-          {value}
+        <text x={padding - 10} y={y + 4} textAnchor="end" fontSize={12} fill="#5c7383">
+          {formatCompactCurrency(value)}
         </text>
       </g>
     );
   });
 
-  // Show date labels for first, middle, and last dates only
   const xLabelIndices = sortedKpis.length <= 10
     ? sortedKpis.map((_, i) => i)
     : [0, Math.floor(sortedKpis.length / 2), sortedKpis.length - 1];
@@ -96,65 +103,63 @@ export default function SalesHistoryChart({
         y={chartHeight - padding + 20}
         textAnchor="middle"
         fontSize={11}
-        fill="#6b7280"
+        fill="#5c7383"
         transform={`rotate(-45, ${x}, ${chartHeight - padding + 20})`}
       >
-        {kpi.kpi_date}
+        {formatShortDate(kpi.kpi_date)}
       </text>
     );
   });
 
   return (
     <div className="sales-history-chart">
-      <h3>Sales History</h3>
-      <div className="chart-container">
-        <svg width={chartWidth} height={chartHeight} viewBox={`0 0 ${chartWidth} ${chartHeight}`}>
-          {/* Y-axis */}
+      <div className="panel__header">
+        <div className="section-heading">
+          <h3>Sales History</h3>
+          <p>Daily sales bars for the selected KPI window. Promo and holiday days are highlighted.</p>
+        </div>
+      </div>
+
+      <div className="chart-frame">
+        <svg width="100%" height={chartHeight} viewBox={`0 0 ${chartWidth} ${chartHeight}`}>
           <line
             x1={padding}
             y1={padding}
             x2={padding}
             y2={chartHeight - padding}
-            stroke="#9ca3af"
+            stroke="#8aa0af"
             strokeWidth={2}
           />
 
-          {/* X-axis */}
           <line
             x1={padding}
             y1={chartHeight - padding}
             x2={chartWidth - padding}
             y2={chartHeight - padding}
-            stroke="#9ca3af"
+            stroke="#8aa0af"
             strokeWidth={2}
           />
 
-          {/* Grid lines and labels */}
           {yAxisLabels}
-
-          {/* Data bars */}
           {bars}
-
-          {/* X-axis labels */}
           {xAxisLabels}
-
-          {/* Legend */}
-          <g transform={`translate(${chartWidth - 150}, 20)`}>
-            <rect width={12} height={12} fill="#3b82f6" rx={2} />
-            <text x={20} y={11} fontSize={12} fill="#374151">
-              Normal Day
-            </text>
-            <rect y={20} width={12} height={12} fill="#ef4444" rx={2} />
-            <text x={20} y={31} fontSize={12} fill="#374151">
-              Promo/Holiday
-            </text>
-          </g>
         </svg>
+      </div>
+
+      <div className="chart-legend" aria-label="Sales chart legend">
+        <span>
+          <i className="legend-swatch legend-swatch--teal" />
+          Normal day
+        </span>
+        <span>
+          <i className="legend-swatch legend-swatch--amber" />
+          Promo or holiday
+        </span>
       </div>
 
       {sortedKpis.length > 7 && (
         <p className="chart-note">
-          * Only showing first, middle, and last date labels for clarity
+          Label density is reduced automatically when the date range gets longer.
         </p>
       )}
     </div>

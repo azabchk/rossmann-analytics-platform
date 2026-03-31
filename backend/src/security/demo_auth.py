@@ -1,10 +1,8 @@
 from dataclasses import dataclass
 
-import jwt
-
 from src.core.config import Settings
-from src.core.errors import ConfigurationError
 from src.schemas.auth import DemoAccessTokenResponse
+from src.security.access_tokens import create_access_token_response
 
 
 @dataclass(frozen=True, slots=True)
@@ -22,22 +20,10 @@ ANALYST_DEMO_ACCOUNT = DemoAccount(
 
 
 def create_demo_access_token(settings: Settings) -> DemoAccessTokenResponse:
-    if not settings.supabase_jwt_secret:
-        raise ConfigurationError("SUPABASE_JWT_SECRET must be configured for local demo auth")
-
-    payload = {
-        "sub": ANALYST_DEMO_ACCOUNT.user_id,
-        "email": ANALYST_DEMO_ACCOUNT.email,
-        "aud": settings.supabase_jwt_audience,
-        "app_metadata": {"role": ANALYST_DEMO_ACCOUNT.role},
-    }
-    if settings.supabase_jwt_issuer:
-        payload["iss"] = settings.supabase_jwt_issuer
-
-    access_token = jwt.encode(payload, settings.supabase_jwt_secret, algorithm="HS256")
-    return DemoAccessTokenResponse(
-        access_token=access_token,
+    token_response = create_access_token_response(
         user_id=ANALYST_DEMO_ACCOUNT.user_id,
         email=ANALYST_DEMO_ACCOUNT.email,
         role=ANALYST_DEMO_ACCOUNT.role,
+        settings=settings,
     )
+    return DemoAccessTokenResponse(**token_response.model_dump())

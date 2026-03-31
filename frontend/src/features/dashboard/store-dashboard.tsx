@@ -51,13 +51,16 @@ export default function StoreDashboard({
   if (stores.length === 0 && !isLoading) {
     return (
       <section className="dashboard-page">
-        <header className="dashboard-header">
-          <h1>Store Performance Dashboard</h1>
-          <p>
-            Authorized analytics are served by the backend API and rendered here
-            without frontend business rules.
-          </p>
-        </header>
+        <div className="page-hero">
+          <div className="section-copy">
+            <p className="eyebrow">Store analytics</p>
+            <h1>Store Performance Dashboard</h1>
+            <p className="lead">
+              Authorized analytics are served by the backend API and rendered here
+              without frontend business rules.
+            </p>
+          </div>
+        </div>
         <DashboardEmptyState
           title="No Stores Available"
           message="This account does not currently have access to any stores."
@@ -68,13 +71,28 @@ export default function StoreDashboard({
 
   return (
     <section className="dashboard-page">
-      <header className="dashboard-header">
-        <h1>Store Performance Dashboard</h1>
-        <p>
-          Authorized KPI analytics for the selected store and date range. Access
-          control, filtering, and aggregation remain in the FastAPI backend.
-        </p>
-      </header>
+      <div className="page-hero">
+        <div className="section-copy">
+          <p className="eyebrow">Store analytics</p>
+          <h1>Store Performance Dashboard</h1>
+          <p className="lead">
+            Authorized KPI analytics for the selected store and date range. Access
+            control, filtering, and aggregation remain in the FastAPI backend.
+          </p>
+        </div>
+        <aside className="page-hero__aside">
+          <article className="stat-card">
+            <span className="stat-card__label">Accessible stores</span>
+            <strong>{stores.length}</strong>
+            <p>Only stores approved for the active user are listed here.</p>
+          </article>
+          <article className="stat-card">
+            <span className="stat-card__label">Selected range</span>
+            <strong>{startDate}</strong>
+            <p>to {endDate}</p>
+          </article>
+        </aside>
+      </div>
 
       <StoreFilterForm
         stores={stores}
@@ -87,13 +105,22 @@ export default function StoreDashboard({
 
       {selectedStore ? (
         <section className="selected-store" aria-label="Selected store">
-          <h2>Store {selectedStore.store_id}</h2>
-          <p>
-            Type {selectedStore.store_type}, assortment{" "}
-            {selectedStore.assortment.toUpperCase()}, competition distance{" "}
-            {selectedStore.competition_distance}m
-            {selectedStore.promo2 ? ", Promo2 enabled" : ", Promo2 not enabled"}
-          </p>
+          <div className="section-copy">
+            <p className="eyebrow">Selected store</p>
+            <h2>Store {selectedStore.store_id}</h2>
+            <p>
+              Store metadata is descriptive only. The KPI figures below continue to
+              come directly from the backend response.
+            </p>
+          </div>
+          <div className="selected-store__meta">
+            <span className="pill pill--accent">Type {selectedStore.store_type}</span>
+            <span className="pill">Assortment {selectedStore.assortment.toUpperCase()}</span>
+            <span className="pill">Competition {selectedStore.competition_distance}m</span>
+            <span className={selectedStore.promo2 ? "pill pill--warm" : "pill"}>
+              {selectedStore.promo2 ? "Promo2 enabled" : "Promo2 disabled"}
+            </span>
+          </div>
         </section>
       ) : (
         <DashboardEmptyState
@@ -116,7 +143,11 @@ export default function StoreDashboard({
 
       {summary ? (
         <section className="dashboard-summary" aria-label="KPI summary">
-          <h2>Performance Summary</h2>
+          <div className="section-copy">
+            <p className="eyebrow">KPI summary</p>
+            <h2>Performance Summary</h2>
+            <p>Headline KPI totals for the current request window.</p>
+          </div>
           <div className="summary-grid">
             <article className="summary-card">
               <h3>Total Sales</h3>
@@ -143,11 +174,20 @@ export default function StoreDashboard({
       ) : null}
 
       {dailyKpis.length > 0 ? (
-        <section className="dashboard-data">
-          <SalesHistoryChart kpis={dailyKpis} />
-          <section aria-label="Recent KPI records">
-            <h2>Recent KPI Records</h2>
-            <table>
+        <section className="content-grid dashboard-data">
+          <section className="panel">
+            <SalesHistoryChart kpis={dailyKpis} />
+          </section>
+
+          <section className="panel" aria-label="Recent KPI records">
+            <div className="table-card__header">
+              <div className="section-heading">
+                <h2>Recent KPI Records</h2>
+                <p>The most recent daily rows returned by the backend for the selected store.</p>
+              </div>
+              <span className="pill">{dailyKpis.length} rows loaded</span>
+            </div>
+            <table className="data-table">
               <thead>
                 <tr>
                   <th scope="col">Date</th>
@@ -159,7 +199,9 @@ export default function StoreDashboard({
               <tbody>
                 {dailyKpis.slice(0, 10).map((kpi) => (
                   <tr key={`${kpi.store_id}-${kpi.kpi_date}`}>
-                    <td>{kpi.kpi_date}</td>
+                    <td>
+                      <strong>{kpi.kpi_date}</strong>
+                    </td>
                     <td>{formatCurrency(kpi.total_sales)}</td>
                     <td>{kpi.total_customers.toLocaleString()}</td>
                     <td>{kpi.transactions.toLocaleString()}</td>

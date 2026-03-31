@@ -188,16 +188,34 @@ export default function ForecastView() {
 
   return (
     <section className="forecast-page">
-      <header>
-        <h1>Forecasts</h1>
-        <p>
-          Published forecasts are exposed through FastAPI only. The browser does
-          not talk to Supabase directly.
-        </p>
-      </header>
+      <div className="page-hero">
+        <div className="section-copy">
+          <p className="eyebrow">Forecasting workspace</p>
+          <h1>Forecasts</h1>
+          <p className="lead">
+            Published forecasts are exposed through FastAPI only. The browser does
+            not talk to Supabase directly.
+          </p>
+        </div>
+        <aside className="page-hero__aside">
+          <article className="stat-card">
+            <span className="stat-card__label">Accessible stores</span>
+            <strong>{state.stores.length}</strong>
+            <p>Use the store selector below to request the published forecast slice.</p>
+          </article>
+          <article className="stat-card">
+            <span className="stat-card__label">Active warning count</span>
+            <strong>{state.warnings.length}</strong>
+            <p>Low-data and readiness signals are surfaced alongside the forecast.</p>
+          </article>
+        </aside>
+      </div>
 
       <div className="forecast-controls">
-        <label htmlFor="forecast-store-select">Store</label>
+        <div className="forecast-controls__copy">
+          <label htmlFor="forecast-store-select">Store</label>
+          <p className="field-note">Only stores returned by the backend are available here.</p>
+        </div>
         <select
           id="forecast-store-select"
           value={state.selectedStoreId ?? ""}
@@ -244,17 +262,41 @@ export default function ForecastView() {
       {state.forecast ? (
         <>
           <section className="forecast-summary">
-            <h2>Store {state.forecast.store_id} Forecast</h2>
-            <p>
-              Forecast window: {state.forecast.forecast_start_date} to{" "}
-              {state.forecast.forecast_end_date}
-            </p>
-            <p>
-              Model: {state.forecast.model_metadata.model_name} (
-              {state.forecast.model_metadata.model_type})
-            </p>
-            <p>Version: {state.forecast.model_metadata.version}</p>
-            <p>Published at: {state.forecast.model_metadata.published_at}</p>
+            <div className="forecast-summary__header">
+              <div className="section-copy">
+                <p className="eyebrow">Published output</p>
+                <h2>Store {state.forecast.store_id} Forecast</h2>
+                <p>
+                  Forecast window: {state.forecast.forecast_start_date} to{" "}
+                  {state.forecast.forecast_end_date}
+                </p>
+              </div>
+              <span className="pill pill--accent">
+                {state.forecast.model_metadata.model_name} / {state.forecast.model_metadata.model_type}
+              </span>
+            </div>
+
+            <div className="selected-store__meta">
+              <span className="pill">Version {state.forecast.model_metadata.version}</span>
+              <span className="pill">Published {state.forecast.model_metadata.published_at}</span>
+              <span className="pill">{state.forecast.total} forecast points</span>
+            </div>
+
+            <div className="forecast-metrics">
+              <article className="forecast-metric">
+                <span className="stat-card__label">Window start</span>
+                <strong>{state.forecast.forecast_start_date}</strong>
+              </article>
+              <article className="forecast-metric">
+                <span className="stat-card__label">Window end</span>
+                <strong>{state.forecast.forecast_end_date}</strong>
+              </article>
+              <article className="forecast-metric">
+                <span className="stat-card__label">Active model</span>
+                <strong>{state.forecast.model_metadata.model_type}</strong>
+              </article>
+            </div>
+
             {state.forecast.accuracy_metrics ? (
               <section
                 className={`forecast-accuracy forecast-accuracy--${getAccuracyTone(
@@ -263,41 +305,64 @@ export default function ForecastView() {
                 aria-label="Accuracy summary"
               >
                 <h3>Accuracy Summary</h3>
-                <p>MAPE: {formatMetric(state.forecast.accuracy_metrics.mape)}%</p>
-                <p>RMSE: {formatMetric(state.forecast.accuracy_metrics.rmse)}</p>
-                <p>MAE: {formatMetric(state.forecast.accuracy_metrics.mae)}</p>
+                <div className="metric-grid">
+                  <article className="forecast-metric">
+                    <span className="stat-card__label">MAPE</span>
+                    <strong>{formatMetric(state.forecast.accuracy_metrics.mape)}%</strong>
+                  </article>
+                  <article className="forecast-metric">
+                    <span className="stat-card__label">RMSE</span>
+                    <strong>{formatMetric(state.forecast.accuracy_metrics.rmse)}</strong>
+                  </article>
+                  <article className="forecast-metric">
+                    <span className="stat-card__label">MAE</span>
+                    <strong>{formatMetric(state.forecast.accuracy_metrics.mae)}</strong>
+                  </article>
+                </div>
               </section>
             ) : null}
           </section>
 
-          <ForecastChart forecastPoints={state.forecast.forecasts} />
+          <section className="content-grid">
+            <section className="panel">
+              <ForecastChart forecastPoints={state.forecast.forecasts} />
+            </section>
 
-          <section className="forecast-table">
-            <h2>Forecast Points</h2>
-            <table>
-              <thead>
-                <tr>
-                  <th scope="col">Date</th>
-                  <th scope="col">Predicted Sales</th>
-                  <th scope="col">Lower Bound</th>
-                  <th scope="col">Upper Bound</th>
-                </tr>
-              </thead>
-              <tbody>
-                {state.forecast.forecasts.map((point) => (
-                  <tr key={point.forecast_date}>
-                    <td>{point.forecast_date}</td>
-                    <td>{Math.round(point.predicted_sales).toLocaleString()}</td>
-                    <td>
-                      {Math.round(point.lower_bound ?? point.predicted_sales).toLocaleString()}
-                    </td>
-                    <td>
-                      {Math.round(point.upper_bound ?? point.predicted_sales).toLocaleString()}
-                    </td>
+            <section className="panel forecast-table">
+              <div className="table-card__header">
+                <div className="section-heading">
+                  <h2>Forecast Points</h2>
+                  <p>Every published row returned for the active store selection.</p>
+                </div>
+                <span className="pill pill--warm">{state.forecast.forecasts.length} rows</span>
+              </div>
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th scope="col">Date</th>
+                    <th scope="col">Predicted Sales</th>
+                    <th scope="col">Lower Bound</th>
+                    <th scope="col">Upper Bound</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {state.forecast.forecasts.map((point) => (
+                    <tr key={point.forecast_date}>
+                      <td>
+                        <strong>{point.forecast_date}</strong>
+                      </td>
+                      <td>{Math.round(point.predicted_sales).toLocaleString()}</td>
+                      <td>
+                        {Math.round(point.lower_bound ?? point.predicted_sales).toLocaleString()}
+                      </td>
+                      <td>
+                        {Math.round(point.upper_bound ?? point.predicted_sales).toLocaleString()}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </section>
           </section>
         </>
       ) : null}
@@ -311,7 +376,11 @@ export default function ForecastView() {
 
       {state.warnings.length > 0 ? (
         <section className="forecast-warnings">
-          <h2>Warnings</h2>
+          <div className="section-copy">
+            <p className="eyebrow eyebrow--amber">Readiness signals</p>
+            <h2>Warnings</h2>
+            <p>These backend signals highlight low-data or reduced-confidence cases.</p>
+          </div>
           <ul>
             {state.warnings.map((warning) => (
               <li key={`${warning.store_id}-${warning.warning_type}`}>

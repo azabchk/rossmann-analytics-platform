@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     enable_local_demo_auth: bool = Field(default=False)
 
     supabase_url: str = Field(default="")
+    supabase_publishable_key: str = Field(default="")
     supabase_anon_key: str = Field(default="")
     supabase_service_role_key: str = Field(default="")
     supabase_jwt_secret: str = Field(default="")
@@ -26,7 +27,7 @@ class Settings(BaseSettings):
     database_echo: bool = Field(default=False)
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=(".env", "../.env"),
         case_sensitive=False,
         extra="ignore",
     )

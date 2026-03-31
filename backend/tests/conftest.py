@@ -17,9 +17,10 @@ if str(ROOT) not in sys.path:
 os.environ["SUPABASE_JWT_SECRET"] = "test-secret"
 os.environ["SUPABASE_JWT_ISSUER"] = "https://example.supabase.co/auth/v1"
 os.environ["SUPABASE_JWT_AUDIENCE"] = "authenticated"
-os.environ["DATABASE_URL"] = "postgresql+asyncpg://postgres:postgres@localhost:5432/postgres"
+os.environ["DATABASE_URL"] = "postgresql+asyncpg://rossmann_user:change_me@localhost:5432/rossmann_demo_ready_3"
 
 from src.core.config import get_settings  # noqa: E402
+from src.db.session import get_engine, get_session_factory  # noqa: E402
 from src.core.errors import AuthorizationError, NotFoundError  # noqa: E402
 from src.main import create_app  # noqa: E402
 from src.schemas.forecasts import (  # noqa: E402
@@ -178,6 +179,8 @@ def _build_monthly_kpi_payload(store_id: int = 1) -> list[MonthlyKPIResponse]:
 @pytest.fixture(autouse=True)
 def reset_settings_cache() -> None:
     get_settings.cache_clear()
+    get_engine.cache_clear()
+    get_session_factory.cache_clear()
 
 
 def _build_test_app():

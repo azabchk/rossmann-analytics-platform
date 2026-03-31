@@ -2,6 +2,7 @@ from collections.abc import AsyncIterator
 from functools import lru_cache
 
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.pool import NullPool
 
 from src.core.config import Settings, get_settings
 
@@ -17,6 +18,7 @@ def get_engine() -> AsyncEngine:
         settings.database_url or "postgresql+asyncpg://invalid:invalid@localhost:5432/invalid",
         echo=settings.database_echo,
         future=True,
+        poolclass=NullPool,
     )
 
 

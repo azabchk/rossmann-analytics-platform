@@ -46,9 +46,12 @@ export default function DashboardErrorState({
 
   return (
     <div className={`dashboard-error-state dashboard-error-state--${type}`}>
-      <h2 className="error-title">{errorInfo.title}</h2>
-      <p className="error-message">{message}</p>
-      <p className="error-description">{errorInfo.description}</p>
+      <div className="section-copy">
+        <p className="eyebrow eyebrow--amber">System state</p>
+        <h2 className="error-title">{errorInfo.title}</h2>
+        <p className="error-message">{message}</p>
+        <p className="error-description">{errorInfo.description}</p>
+      </div>
 
       {showDetails && details && (
         <details className="error-details">
@@ -96,7 +99,11 @@ export function DashboardLoadingState({
   return (
     <div className="dashboard-loading-state">
       <div className="loading-spinner" aria-label="Loading" />
-      <p className="loading-message">{message}</p>
+      <div className="section-copy">
+        <p className="eyebrow">Loading</p>
+        <h2>Preparing the view</h2>
+        <p className="loading-message">{message}</p>
+      </div>
     </div>
   );
 }
@@ -120,8 +127,11 @@ export function DashboardEmptyState({
 }: DashboardEmptyStateProps): ReactNode {
   return (
     <div className="dashboard-empty-state">
-      <h2 className="empty-title">{title}</h2>
-      <p className="empty-message">{message}</p>
+      <div className="section-copy">
+        <p className="eyebrow">No data</p>
+        <h2 className="empty-title">{title}</h2>
+        <p className="empty-message">{message}</p>
+      </div>
       {action && (
         <button type="button" onClick={action.onClick} className="empty-action-button">
           {action.label}
