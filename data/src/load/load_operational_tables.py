@@ -1,350 +1,296 @@
-"""Load operational data into database tables.
+"""Load normalized operational data into restricted database tables."""
 
-This module handles loading normalized sales and store data into the
-operational database tables (staging and base tables).
-"""
+from __future__ import annotations
 
 import logging
-from typing import Any
+from collections.abc import Iterable, Iterator
 
 import pandas as pd
-from sqlalchemy import create_engine, text
-from sqlalchemy.engine import Engine
+from sqlalchemy import MetaData, Table, create_engine, text
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.engine import Connection, Engine
 from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
+STAGING_TABLES = {
+    "stores": "internal.stores_staging",
+    "sales": "internal.sales_records_staging",
+}
+
+BASE_TABLES = {
+    "stores": "internal.stores",
+    "sales": "internal.sales_records",
+}
+
+STORE_COLUMNS = [
+    "store_id",
+    "store_type",
+    "assortment",
+    "competition_distance",
+    "competition_open_since_month",
+    "competition_open_since_year",
+    "promo2",
+    "promo2_since_week",
+    "promo2_since_year",
+    "promo_interval",
+]
+
+SALES_COLUMNS = [
+    "store_id",
+    "sales_date",
+    "day_of_week",
+    "sales",
+    "customers",
+    "is_open",
+    "promo",
+    "state_holiday",
+    "school_holiday",
+]
+
+
+def _split_table_name(table_name: str) -> tuple[str, str]:
+    schema, relation = table_name.split(".", maxsplit=1)
+    return schema, relation
+
 
 def get_db_connection(database_url: str) -> Engine:
-    """Create a database connection engine.
+    """Create and test a synchronous SQLAlchemy engine."""
 
-    Args:
-        database_url: Database connection URL
+    engine = create_engine(database_url, future=True, pool_pre_ping=True)
+    with engine.connect() as connection:
+        connection.execute(text("SELECT 1"))
+    return engine
 
-    Returns:
-        SQLAlchemy engine instance
 
-    Raises:
-        SQLAlchemyError: If connection cannot be established
-    """
-    try:
-        engine = create_engine(database_url)
-        # Test connection
-        with engine.connect() as conn:
-            conn.execute(text("SELECT 1"))
-        return engine
-    except SQLAlchemyError as e:
-        logger.error(f"Failed to connect to database: {e}")
-        raise
+def _sanitize_dataframe(df: pd.DataFrame) -> pd.DataFrame:
+    sanitized = df.copy()
+    return sanitized.where(pd.notna(sanitized), None)
+
+
+def _iter_records(df: pd.DataFrame, batch_size: int = 1000) -> Iterator[list[dict[str, object]]]:
+    records = _sanitize_dataframe(df).to_dict(orient="records")
+    for start in range(0, len(records), batch_size):
+        yield records[start : start + batch_size]
+
+
+def _append_dataframe(
+    connection: Connection,
+    df: pd.DataFrame,
+    table_name: str,
+) -> int:
+    if df.empty:
+        return 0
+
+    schema, relation = _split_table_name(table_name)
+    sanitized = _sanitize_dataframe(df)
+    written = sanitized.to_sql(
+        relation,
+        connection,
+        schema=schema,
+        if_exists="append",
+        index=False,
+        method="multi",
+        chunksize=1000,
+    )
+    return int(written or len(sanitized))
+
+
+def _reflect_table(connection: Connection, table_name: str) -> Table:
+    schema, relation = _split_table_name(table_name)
+    metadata = MetaData()
+    return Table(relation, metadata, schema=schema, autoload_with=connection)
+
+
+def _upsert_dataframe(
+    connection: Connection,
+    df: pd.DataFrame,
+    table_name: str,
+    conflict_columns: Iterable[str],
+) -> dict[str, int]:
+    if df.empty:
+        return {"loaded": 0, "updated": 0}
+
+    table = _reflect_table(connection, table_name)
+    written = 0
+    for batch in _iter_records(df):
+        statement = pg_insert(table).values(batch)
+        conflict_column_set = set(conflict_columns)
+        update_columns = {
+            column.name: getattr(statement.excluded, column.name)
+            for column in table.columns
+            if column.name not in conflict_column_set
+            and column.name not in {"sales_record_id", "created_at"}
+        }
+        connection.execute(
+            statement.on_conflict_do_update(
+                index_elements=list(conflict_columns),
+                set_=update_columns,
+            )
+        )
+        written += len(batch)
+    return {"loaded": written, "updated": 0}
 
 
 def load_operational_tables(
     sales_df: pd.DataFrame,
     stores_df: pd.DataFrame,
     database_url: str,
-    use_staging: bool = False,
+    use_staging: bool = True,
     upsert: bool = True,
 ) -> dict[str, int]:
-    """Load normalized sales and stores data into operational tables.
+    """Load normalized sales and store data into base or staging tables."""
 
-    Args:
-        sales_df: Normalized sales DataFrame
-        stores_df: Normalized stores DataFrame
-        database_url: Database connection URL
-        use_staging: If True, load into staging tables. If False, load into base tables.
-        upsert: If True, perform upsert (update existing, insert new). If False, append only.
-
-    Returns:
-        Dictionary with counts of records loaded per table
-
-    Raises:
-        ValueError: If DataFrames are empty or invalid
-        SQLAlchemyError: If database operations fail
-    """
-    # Validate input DataFrames
     if sales_df.empty and stores_df.empty:
-        raise ValueError("Both sales and stores DataFrames are empty")
+        raise ValueError("Both sales_df and stores_df are empty")
 
     engine = get_db_connection(database_url)
-
-    results = {
-        "sales_loaded": 0,
-        "stores_loaded": 0,
-        "sales_updated": 0,
-        "stores_updated": 0,
-    }
+    tables = STAGING_TABLES if use_staging else BASE_TABLES
 
     try:
-        # Determine schema suffix based on staging flag
-        schema_suffix = "_staging" if use_staging else ""
-        sales_table = f"internal.sales_operational{schema_suffix}"
-        stores_table = f"internal.stores_operational{schema_suffix}"
+        with engine.begin() as connection:
+            if use_staging or not upsert:
+                stores_loaded = _append_dataframe(connection, stores_df[STORE_COLUMNS], tables["stores"])
+                sales_loaded = _append_dataframe(connection, sales_df[SALES_COLUMNS], tables["sales"])
+                return {
+                    "stores_loaded": stores_loaded,
+                    "stores_updated": 0,
+                    "sales_loaded": sales_loaded,
+                    "sales_updated": 0,
+                }
 
-        # Load stores first (foreign key dependency)
-        if not stores_df.empty:
-            store_results = _load_dataframe(
-                df=stores_df,
-                table_name=stores_table,
-                engine=engine,
-                upsert=upsert,
-                key_columns=["store_id"],
+            store_results = _upsert_dataframe(
+                connection=connection,
+                df=stores_df[STORE_COLUMNS],
+                table_name=tables["stores"],
+                conflict_columns=["store_id"],
             )
-            results["stores_loaded"] = store_results["inserted"]
-            results["stores_updated"] = store_results["updated"]
-            logger.info(f"Loaded {results['stores_loaded']} store records")
-
-        # Load sales records
-        if not sales_df.empty:
-            sales_results = _load_dataframe(
-                df=sales_df,
-                table_name=sales_table,
-                engine=engine,
-                upsert=upsert,
-                key_columns=["store_id", "date"],
+            sales_results = _upsert_dataframe(
+                connection=connection,
+                df=sales_df[SALES_COLUMNS],
+                table_name=tables["sales"],
+                conflict_columns=["store_id", "sales_date"],
             )
-            results["sales_loaded"] = sales_results["inserted"]
-            results["sales_updated"] = sales_results["updated"]
-            logger.info(f"Loaded {results['sales_loaded']} sales records")
-
-        return results
-
-    except SQLAlchemyError as e:
-        logger.error(f"Database error during load: {e}")
+            return {
+                "stores_loaded": store_results["loaded"],
+                "stores_updated": store_results["updated"],
+                "sales_loaded": sales_results["loaded"],
+                "sales_updated": sales_results["updated"],
+            }
+    except SQLAlchemyError as exc:
+        logger.error("Failed loading operational tables: %s", exc)
         raise
     finally:
         engine.dispose()
 
 
-def _load_dataframe(
-    df: pd.DataFrame,
-    table_name: str,
-    engine: Engine,
-    upsert: bool = True,
-    key_columns: list[str] | None = None,
-) -> dict[str, int]:
-    """Load a DataFrame into a database table.
-
-    Args:
-        df: DataFrame to load
-        table_name: Full table name (including schema)
-        engine: SQLAlchemy engine
-        upsert: Whether to perform upsert or insert only
-        key_columns: Columns to use as key for upsert
-
-    Returns:
-        Dictionary with inserted and updated counts
-    """
-    inserted = 0
-    updated = 0
-
-    try:
-        # Ensure DataFrame column types match database expectations
-        df_to_load = df.copy()
-
-        # Handle NaN values appropriately
-        for col in df_to_load.columns:
-            if df_to_load[col].dtype == "object":
-                df_to_load[col] = df_to_load[col].where(pd.notna(df_to_load[col]), None)
-
-        if upsert and key_columns:
-            # Perform upsert using PostgreSQL ON CONFLICT
-            inserted, updated = _upsert_dataframe(
-                df=df_to_load,
-                table_name=table_name,
-                engine=engine,
-                key_columns=key_columns,
-            )
-        else:
-            # Simple insert
-            rows_inserted = df_to_load.to_sql(
-                table_name,
-                engine,
-                if_exists="append",
-                index=False,
-                method="multi",
-            )
-            inserted = rows_inserted
-
-        return {"inserted": inserted, "updated": updated}
-
-    except SQLAlchemyError as e:
-        logger.error(f"Error loading DataFrame into {table_name}: {e}")
-        raise
-
-
-def _upsert_dataframe(
-    df: pd.DataFrame,
-    table_name: str,
-    engine: Engine,
-    key_columns: list[str],
-) -> tuple[int, int]:
-    """Perform upsert (update existing, insert new) for a DataFrame.
-
-    Uses PostgreSQL's ON CONFLICT clause for efficient upsert.
-
-    Args:
-        df: DataFrame to upsert
-        table_name: Full table name (including schema)
-        engine: SQLAlchemy engine
-        key_columns: Columns that define uniqueness
-
-    Returns:
-        Tuple of (inserted_count, updated_count)
-    """
-    inserted = 0
-    updated = 0
-
-    # Split table name into schema and table
-    parts = table_name.split(".")
-    if len(parts) == 2:
-        schema, table = parts
-    else:
-        schema = "public"
-        table = parts[0]
-
-    with engine.connect() as conn:
-        for _, row in df.iterrows():
-            # Build conflict condition
-            conflict_condition = " AND ".join([f'"{col}" = %s' for col in key_columns])
-            conflict_values = [row[col] for col in key_columns]
-
-            # Check if row exists
-            check_query = text(
-                f"""
-                SELECT EXISTS(
-                    SELECT 1 FROM "{schema}"."{table}"
-                    WHERE {conflict_condition}
-                )
-                """
-            )
-
-            exists = conn.execute(check_query, conflict_values).scalar()
-
-            # Get all column values
-            columns = [f'"{col}"' for col in df.columns]
-            values = [row[col] for col in df.columns]
-            placeholders = ", ".join(["%s"] * len(df.columns))
-
-            if exists:
-                # Update existing row
-                set_clause = ", ".join([
-                    f'"{col}" = %s'
-                    for col in df.columns
-                    if col not in key_columns
-                ])
-                set_values = [row[col] for col in df.columns if col not in key_columns]
-
-                update_query = text(
-                    f"""
-                    UPDATE "{schema}"."{table}"
-                    SET {set_clause}
-                    WHERE {conflict_condition}
-                    """
-                )
-
-                conn.execute(update_query, set_values + conflict_values)
-                updated += 1
-            else:
-                # Insert new row
-                insert_query = text(
-                    f"""
-                    INSERT INTO "{schema}"."{table}" ({', '.join(columns)})
-                    VALUES ({placeholders})
-                    """
-                )
-
-                conn.execute(insert_query, values)
-                inserted += 1
-
-        conn.commit()
-
-    return inserted, updated
-
-
 def clear_staging_tables(database_url: str, tables: list[str] | None = None) -> int:
-    """Clear staging tables before loading fresh data.
+    """Clear configured staging tables before a repeatable ingestion run."""
 
-    Args:
-        database_url: Database connection URL
-        tables: List of table names to clear (schema.table). If None, clears all staging tables.
-
-    Returns:
-        Number of tables cleared
-
-    Raises:
-        SQLAlchemyError: If database operations fail
-    """
     engine = get_db_connection(database_url)
-
-    if tables is None:
-        tables = [
-            "internal.sales_operational_staging",
-            "internal.stores_operational_staging",
-        ]
+    target_tables = tables or [STAGING_TABLES["sales"], STAGING_TABLES["stores"]]
 
     try:
-        with engine.connect() as conn:
-            for table in tables:
-                truncate_query = text(f'TRUNCATE TABLE IF EXISTS "{table}" CASCADE')
-                conn.execute(truncate_query)
-                conn.commit()
-                logger.info(f"Cleared staging table: {table}")
-
-        return len(tables)
-
-    except SQLAlchemyError as e:
-        logger.error(f"Error clearing staging tables: {e}")
-        raise
+        with engine.begin() as connection:
+            for table_name in target_tables:
+                schema, relation = _split_table_name(table_name)
+                connection.execute(
+                    text(f'TRUNCATE TABLE "{schema}"."{relation}" RESTART IDENTITY CASCADE')
+                )
+        return len(target_tables)
     finally:
         engine.dispose()
 
 
 def promote_staging_to_base(database_url: str) -> dict[str, int]:
-    """Promote data from staging tables to base tables.
+    """Promote staging contents into stable operational base tables."""
 
-    This atomically replaces the base tables with staging data.
-
-    Args:
-        database_url: Database connection URL
-
-    Returns:
-        Dictionary with counts of records promoted per table
-
-    Raises:
-        SQLAlchemyError: If database operations fail
-    """
     engine = get_db_connection(database_url)
-
-    results = {}
-
     try:
-        with engine.connect() as conn:
-            # Get counts before promotion
-            for table in ["sales_operational", "stores_operational"]:
-                staging_name = f"internal.{table}_staging"
-                base_name = f"internal.{table}"
+        with engine.begin() as connection:
+            store_count = connection.execute(
+                text("SELECT COUNT(*) FROM internal.stores_staging")
+            ).scalar_one()
+            sales_count = connection.execute(
+                text("SELECT COUNT(*) FROM internal.sales_records_staging")
+            ).scalar_one()
 
-                # Count staging records
-                count_query = text(f'SELECT COUNT(*) FROM "{staging_name}"')
-                count = conn.execute(count_query).scalar()
-                results[f"{table}_promoted"] = count
-
-                # Replace base table with staging
-                drop_query = text(f'DROP TABLE IF EXISTS "{base_name}" CASCADE')
-                conn.execute(drop_query)
-
-                rename_query = text(
-                    f'ALTER TABLE "{staging_name}" RENAME TO "{table}"'
+            connection.execute(
+                text(
+                    """
+                    INSERT INTO internal.stores (
+                        store_id,
+                        store_type,
+                        assortment,
+                        competition_distance,
+                        competition_open_since_month,
+                        competition_open_since_year,
+                        promo2,
+                        promo2_since_week,
+                        promo2_since_year,
+                        promo_interval
+                    )
+                    SELECT
+                        store_id,
+                        store_type,
+                        assortment,
+                        competition_distance,
+                        competition_open_since_month,
+                        competition_open_since_year,
+                        promo2,
+                        promo2_since_week,
+                        promo2_since_year,
+                        promo_interval
+                    FROM internal.stores_staging
+                    ON CONFLICT (store_id) DO UPDATE
+                    SET
+                        store_type = EXCLUDED.store_type,
+                        assortment = EXCLUDED.assortment,
+                        competition_distance = EXCLUDED.competition_distance,
+                        competition_open_since_month = EXCLUDED.competition_open_since_month,
+                        competition_open_since_year = EXCLUDED.competition_open_since_year,
+                        promo2 = EXCLUDED.promo2,
+                        promo2_since_week = EXCLUDED.promo2_since_week,
+                        promo2_since_year = EXCLUDED.promo2_since_year,
+                        promo_interval = EXCLUDED.promo_interval,
+                        updated_at = timezone('utc', now())
+                    """
                 )
-                conn.execute(rename_query)
+            )
 
-                conn.commit()
-                logger.info(f"Promoted {count} records from {staging_name} to {base_name}")
+            connection.execute(text("DELETE FROM internal.sales_records"))
+            connection.execute(
+                text(
+                    """
+                    INSERT INTO internal.sales_records (
+                        store_id,
+                        sales_date,
+                        day_of_week,
+                        sales,
+                        customers,
+                        is_open,
+                        promo,
+                        state_holiday,
+                        school_holiday
+                    )
+                    SELECT
+                        store_id,
+                        sales_date,
+                        day_of_week,
+                        sales,
+                        customers,
+                        is_open,
+                        promo,
+                        state_holiday,
+                        school_holiday
+                    FROM internal.sales_records_staging
+                    """
+                )
+            )
 
-        return results
-
-    except SQLAlchemyError as e:
-        logger.error(f"Error promoting staging to base: {e}")
-        raise
+        return {
+            "stores_promoted": int(store_count),
+            "sales_promoted": int(sales_count),
+        }
     finally:
         engine.dispose()

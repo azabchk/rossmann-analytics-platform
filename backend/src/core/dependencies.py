@@ -12,7 +12,6 @@ def get_settings_dependency() -> Settings:
 
 
 async def get_database_session(
-    session: AsyncIterator[AsyncSession] = Depends(get_db_session),
-) -> AsyncIterator[AsyncSession]:
-    async for item in session:
-        yield item
+    session: AsyncSession = Depends(get_db_session),
+) -> AsyncSession:
+    return session

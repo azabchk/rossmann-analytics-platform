@@ -1,8 +1,6 @@
-"""Validation reporting for ingestion pipeline.
+"""Validation reporting for ingestion pipeline runs."""
 
-This module provides utilities for generating and formatting validation reports
-from ingestion runs, including summary statistics and detailed issue listings.
-"""
+from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -13,46 +11,33 @@ from .models import (
     IngestionRunStatus,
     TableValidationResult,
     ValidationIssue,
-    ValidationIssueType,
-    ValidationSeverity,
 )
 
 
-@dataclass
+@dataclass(slots=True)
 class ValidationReport:
-    """Formatted validation report for an ingestion run.
-
-    Provides summary statistics, issue breakdown, and detailed listings
-    for validation issues found during ingestion.
-    """
+    """Formatted validation report for one ingestion run."""
 
     run_id: str
     status: str
     timestamp: str
     duration_seconds: float | None
-
-    # Input summary
     train_csv_path: str
     store_csv_path: str
     train_record_count: int
     store_record_count: int
-
-    # Summary
     total_records: int
     total_valid: int
     total_errors: int
     total_warnings: int
     success_rate: float
-
-    # Detailed results by table
     table_results: dict[str, dict[str, Any]] = field(default_factory=dict)
-
-    # Issue breakdown by type
     error_breakdown: dict[str, int] = field(default_factory=dict)
     warning_breakdown: dict[str, int] = field(default_factory=dict)
 
     def to_markdown(self) -> str:
-        """Convert the report to Markdown format."""
+        """Convert the report to Markdown for operator review."""
+
         lines = [
             "# Ingestion Validation Report",
             "",
@@ -60,7 +45,11 @@ class ValidationReport:
             f"**Status**: `{self.status}`",
             f"**Timestamp**: {self.timestamp}",
             "",
-            f"**Duration**: {self.duration_seconds:.2f} seconds" if self.duration_seconds is not None else "**Duration**: N/A",
+            (
+                f"**Duration**: {self.duration_seconds:.2f} seconds"
+                if self.duration_seconds is not None
+                else "**Duration**: N/A"
+            ),
             "",
             "## Input Summary",
             "",
@@ -79,86 +68,59 @@ class ValidationReport:
             "",
         ]
 
-        # Error breakdown
         if self.error_breakdown:
-            lines.extend([
-                "### Errors by Type",
-                "",
-            ])
+            lines.extend(["### Errors by Type", ""])
             for issue_type, count in sorted(self.error_breakdown.items()):
                 lines.append(f"- **{issue_type}**: {count:,}")
             lines.append("")
 
-        # Warning breakdown
         if self.warning_breakdown:
-            lines.extend([
-                "### Warnings by Type",
-                "",
-            ])
+            lines.extend(["### Warnings by Type", ""])
             for issue_type, count in sorted(self.warning_breakdown.items()):
                 lines.append(f"- **{issue_type}**: {count:,}")
             lines.append("")
 
-        # Table details
         if self.table_results:
-            lines.extend([
-                "## Detailed Results by Table",
-                "",
-            ])
+            lines.extend(["## Detailed Results by Table", ""])
             for table_name, result in self.table_results.items():
-                lines.extend([
-                    f"### {table_name}",
-                    "",
-                    f"- **Total Records**: {result['total_records']:,}",
-                    f"- **Valid Records**: {result['valid_records']:,}",
-                    f"- **Errors**: {result['error_count']:,}",
-                    f"- **Warnings**: {result['warning_count']:,}",
-                ])
+                lines.extend(
+                    [
+                        f"### {table_name}",
+                        "",
+                        f"- **Total Records**: {result['total_records']:,}",
+                        f"- **Valid Records**: {result['valid_records']:,}",
+                        f"- **Errors**: {result['error_count']:,}",
+                        f"- **Warnings**: {result['warning_count']:,}",
+                    ]
+                )
 
                 if result.get("issues"):
-                    lines.extend([
-                        "",
-                        "#### Errors:",
-                        "",
-                    ])
-                    for issue in result["issues"][:10]:  # Limit to first 10
+                    lines.extend(["", "#### Errors", ""])
+                    for issue in result["issues"][:10]:
                         lines.append(f"- {issue['message']}")
                     if len(result["issues"]) > 10:
                         lines.append(f"- ... and {len(result['issues']) - 10} more errors")
                     lines.append("")
 
                 if result.get("warnings"):
-                    lines.extend([
-                        "",
-                        "#### Warnings:",
-                        "",
-                    ])
-                    for issue in result["warnings"][:10]:  # Limit to first 10
+                    lines.extend(["", "#### Warnings", ""])
+                    for issue in result["warnings"][:10]:
                         lines.append(f"- {issue['message']}")
                     if len(result["warnings"]) > 10:
                         lines.append(f"- ... and {len(result['warnings']) - 10} more warnings")
                     lines.append("")
 
-        # Overall status message
-        lines.extend([
-            "",
-            "## Overall Status",
-            "",
-        ])
+        lines.extend(["## Overall Status", ""])
         if self.status == IngestionRunStatus.COMPLETED.value:
-            if self.total_errors == 0:
-                lines.append("✅ **Ingestion completed successfully with no errors.**")
-            else:
-                lines.append(f"⚠️ **Ingestion completed with {self.total_errors} errors.**")
+            lines.append("The ingestion run completed successfully.")
         elif self.status == IngestionRunStatus.FAILED.value:
-            lines.append("❌ **Ingestion failed.**")
+            lines.append("The ingestion run failed and requires operator attention.")
         else:
-            lines.append(f"ℹ️ **Ingestion status: {self.status}.**")
+            lines.append(f"The ingestion run is currently in status `{self.status}`.")
 
         return "\n".join(lines)
 
     def to_dict(self) -> dict[str, Any]:
-        """Convert the report to a dictionary."""
         return {
             "run_id": self.run_id,
             "status": self.status,
@@ -180,44 +142,35 @@ class ValidationReport:
 
 
 def create_validation_report(run: IngestionRun) -> ValidationReport:
-    """Create a validation report from an ingestion run.
+    """Create a validation report from an ingestion run."""
 
-    Args:
-        run: The ingestion run to create a report for
+    total_records = (
+        sum(result.total_records for result in run.validation_results.values())
+        or run.train_record_count + run.store_record_count
+    )
+    total_valid = sum(result.valid_records for result in run.validation_results.values())
+    total_errors = sum(result.error_count for result in run.validation_results.values())
+    total_warnings = sum(result.warning_count for result in run.validation_results.values())
+    success_rate = (total_valid / total_records * 100) if total_records > 0 else 0.0
 
-    Returns:
-        ValidationReport containing formatted validation information
-    """
-    # Calculate summary statistics
-    total_records = run.train_record_count + run.store_record_count
-    total_valid = total_records - run.total_error_count
-
-    success_rate = (total_valid / total_records * 100) if total_records > 0 else 0
-
-    # Build issue breakdowns
     error_breakdown: dict[str, int] = {}
     warning_breakdown: dict[str, int] = {}
-
     table_results: dict[str, dict[str, Any]] = {}
 
     for table_name, result in run.validation_results.items():
-        table_dict = result.to_dict()
-
-        # Count issues by type
+        table_results[table_name] = result.to_dict()
         for issue in result.issues:
             issue_type = issue.issue_type.value
             error_breakdown[issue_type] = error_breakdown.get(issue_type, 0) + 1
-
         for issue in result.warnings:
             issue_type = issue.issue_type.value
             warning_breakdown[issue_type] = warning_breakdown.get(issue_type, 0) + 1
 
-        table_results[table_name] = table_dict
-
+    timestamp_source = run.completed_at or run.started_at or datetime.utcnow()
     return ValidationReport(
         run_id=run.run_id,
         status=run.status.value,
-        timestamp=run.started_at.isoformat() if run.started_at else datetime.utcnow().isoformat(),
+        timestamp=timestamp_source.isoformat(),
         duration_seconds=run.duration_seconds,
         train_csv_path=run.train_csv_path or "",
         store_csv_path=run.store_csv_path or "",
@@ -225,8 +178,8 @@ def create_validation_report(run: IngestionRun) -> ValidationReport:
         store_record_count=run.store_record_count,
         total_records=total_records,
         total_valid=total_valid,
-        total_errors=run.total_error_count,
-        total_warnings=run.total_warning_count,
+        total_errors=total_errors,
+        total_warnings=total_warnings,
         success_rate=success_rate,
         table_results=table_results,
         error_breakdown=error_breakdown,
@@ -235,22 +188,9 @@ def create_validation_report(run: IngestionRun) -> ValidationReport:
 
 
 def format_validation_issue(issue: ValidationIssue, include_details: bool = True) -> str:
-    """Format a validation issue as a human-readable string.
+    """Format a validation issue as operator-facing text."""
 
-    Args:
-        issue: The validation issue to format
-        include_details: Whether to include field and value details
-
-    Returns:
-        Formatted string describing the issue
-    """
-    severity_emoji = {
-        ValidationSeverity.ERROR: "❌",
-        ValidationSeverity.WARNING: "⚠️",
-        ValidationSeverity.INFO: "ℹ️",
-    }
-
-    base = f"{severity_emoji.get(issue.severity, '')} {issue.message}"
+    base = f"[{issue.severity.value.upper()}] {issue.message}"
 
     if include_details:
         details = []
@@ -262,37 +202,25 @@ def format_validation_issue(issue: ValidationIssue, include_details: bool = True
             details.append(f"field: {issue.field_name}")
         if details:
             base += f" ({', '.join(details)})"
-
     return base
 
 
-def summarize_validation_results(
-    results: list[TableValidationResult],
-) -> dict[str, Any]:
-    """Summarize multiple table validation results.
+def summarize_validation_results(results: list[TableValidationResult]) -> dict[str, Any]:
+    """Summarize multiple table validation results."""
 
-    Args:
-        results: List of table validation results
+    total_records = sum(result.total_records for result in results)
+    total_valid = sum(result.valid_records for result in results)
+    total_errors = sum(result.error_count for result in results)
+    total_warnings = sum(result.warning_count for result in results)
 
-    Returns:
-        Dictionary containing summary statistics
-    """
-    total_records = sum(r.total_records for r in results)
-    total_valid = sum(r.valid_records for r in results)
-    total_errors = sum(r.error_count for r in results)
-    total_warnings = sum(r.warning_count for r in results)
-
-    # Count unique issue types
     error_types: dict[str, int] = {}
+    warning_types: dict[str, int] = {}
     for result in results:
         for issue in result.issues:
             issue_type = issue.issue_type.value
             error_types[issue_type] = error_types.get(issue_type, 0) + 1
-
-    warning_types: dict[str, int] = {}
-    for result in results:
-        for issue in result.warnings:
-            issue_type = issue.issue_type.value
+        for warning in result.warnings:
+            issue_type = warning.issue_type.value
             warning_types[issue_type] = warning_types.get(issue_type, 0) + 1
 
     return {
@@ -300,7 +228,7 @@ def summarize_validation_results(
         "total_valid": total_valid,
         "total_errors": total_errors,
         "total_warnings": total_warnings,
-        "success_rate": (total_valid / total_records * 100) if total_records > 0 else 0,
+        "success_rate": (total_valid / total_records * 100) if total_records > 0 else 0.0,
         "error_types": error_types,
         "warning_types": warning_types,
     }

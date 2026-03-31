@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     backend_host: str = Field(default="0.0.0.0")
     backend_port: int = Field(default=8000)
     backend_cors_origins: str = Field(default="http://localhost:3000")
+    enable_local_demo_auth: bool = Field(default=False)
 
     supabase_url: str = Field(default="")
     supabase_anon_key: str = Field(default="")

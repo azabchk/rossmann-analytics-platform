@@ -9,11 +9,14 @@ export default function HomePage() {
         and business rules remain behind the FastAPI backend.
       </p>
       <p>
-        Current phase status: shared shell, authentication entry point, and API
-        client scaffolding only.
+        Current MVP status: dashboard and forecast pages consume the FastAPI
+        backend for KPI and published forecast data.
       </p>
       <p>
-        <Link href="/login">Go to login placeholder</Link>
+        <Link href="/dashboard">Open the dashboard</Link>
+      </p>
+      <p>
+        <Link href="/forecasts">Open the forecasts page</Link>
       </p>
     </section>
   );

@@ -1,3 +1,5 @@
+"""Application error handling."""
+
 from typing import Any
 
 from fastapi import FastAPI, Request, status
@@ -38,6 +40,24 @@ class AuthorizationError(AppError):
             code="forbidden",
             message=message,
             status_code=status.HTTP_403_FORBIDDEN,
+        )
+
+
+class NotFoundError(AppError):
+    def __init__(self, message: str = "Resource not found") -> None:
+        super().__init__(
+            code="not_found",
+            message=message,
+            status_code=status.HTTP_404_NOT_FOUND,
+        )
+
+
+class ValidationError(AppError):
+    def __init__(self, message: str = "Invalid input") -> None:
+        super().__init__(
+            code="validation_error",
+            message=message,
+            status_code=status.HTTP_400_BAD_REQUEST,
         )
 
 

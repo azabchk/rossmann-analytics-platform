@@ -1,287 +1,89 @@
 # Data Module
 
-Data ingestion, validation, preprocessing, and operational table loading for the
-Sales Forecasting Platform.
+The `data` module owns the Rossmann ingestion and preprocessing path for the
+platform. In the approved architecture this module is an internal pipeline
+module, not a user-facing service. Its responsibility in the current phase is
+to turn raw Rossmann source files into validated, normalized operational data
+inside controlled Supabase schemas.
 
-## Overview
+## Phase Scope
 
-The data module implements a trusted data pipeline that:
-1. Reads raw Rossmann CSV files (train.csv, store.csv)
-2. Validates data quality with configurable rules
-3. Normalizes and cleans the data
-4. Loads transformed data into operational tables
-5. Tracks all runs with detailed metadata and validation reports
+The currently implemented Phase 3 slice covers:
 
-## Architecture
+- raw CSV readers for `train.csv` and `store.csv`
+- structural, logical, and referential validation
+- validation reporting and ingestion run metadata
+- normalization into stable operational column shapes
+- loading into restricted staging tables and promotion into base tables
+- a repeatable Python entrypoint for local operator execution
 
-### Modules
+This module does not expose HTTP endpoints, compute KPI marts, or run forecast
+training. Those capabilities belong to later approved phases.
 
-| Module | Purpose | Files |
-|---------|---------|--------|
-| `ingest` | Read raw Rossmann CSV files | `read_train_csv.py`, `read_store_csv.py` |
-| `quality` | Validate data quality and identify issues | `validate_sales_records.py`, `validate_store_records.py` |
-| `transform` | Normalize and clean data | `normalize_sales.py`, `normalize_stores.py` |
-| `load` | Load data into database tables | `load_operational_tables.py` |
-| `runs` | Orchestrate pipeline and track metadata | `run_ingestion.py`, `models.py`, `reporting.py`, `persist_ingestion_run.py` |
+## Ingestion Flow
 
-### Data Flow
+The implemented pipeline follows this sequence:
 
-```
-Raw CSV Files
-    ↓
-[ingest] - Read and parse CSV
-    ↓
-[quality] - Validate and identify issues
-    ↓
-[runs] - Record validation results
-    ↓
-[transform] - Normalize and clean data
-    ↓
-[load] - Load into operational tables
-    ↓
-Database (internal schema)
-```
+1. Read `train.csv` and `store.csv` from configured local paths.
+2. Validate raw structure, required columns, logical quality rules, duplicates,
+   and cross-file store references.
+3. Persist run metadata and validation outcomes to restricted ingestion tables.
+4. Normalize accepted records into controlled operational shapes.
+5. Load normalized records into `internal.stores_staging` and
+   `internal.sales_records_staging`.
+6. Promote the validated staging contents into `internal.stores` and
+   `internal.sales_records`.
 
-## Running the Ingestion Pipeline
+Validation errors stop the run before normalization and loading. Warnings are
+retained in run metadata and reports but do not block progression by
+themselves.
 
-### Prerequisites
+## Database Objects Used
 
-1. **Database Setup**: Ensure the ingestion runs migration is applied:
-   ```bash
-   # Apply migration
-   psql -h localhost -U postgres -d sales_forecasting -f supabase/migrations/20260311_004_ingestion_runs.sql
-   ```
+Phase 3 relies on these `internal` schema objects:
 
-2. **Data Files**: Have Rossmann CSV files ready:
-   - `train.csv` - Daily sales records
-   - `store.csv` - Store metadata
+- `internal.ingestion_runs`
+- `internal.ingestion_validation_results`
+- `internal.ingestion_validation_issues`
+- `internal.stores_staging`
+- `internal.sales_records_staging`
+- `internal.stores`
+- `internal.sales_records`
 
-### Environment Variables
+The `internal` schema remains restricted. The frontend does not read these
+tables directly, and no user-facing API is defined here.
 
-Configure these environment variables before running:
+## Runtime Inputs
 
-| Variable | Required | Description | Example |
-|----------|-----------|-------------|----------|
-| `DATABASE_URL` | Yes | PostgreSQL connection URL | `postgresql://user:pass@localhost:5432/db` |
-| `TRAIN_CSV_PATH` | Yes | Path to train.csv | `/data/train.csv` |
-| `STORE_CSV_PATH` | Yes | Path to store.csv | `/data/store.csv` |
-| `USE_STAGING` | No | Use staging tables before promotion (default: true) | `true` or `false` |
-| `TRIGGERED_BY` | No | User/system triggering the run | `admin@example.com` |
+The ingestion entrypoint supports the following environment variables:
 
-### Running via Python
+- `DATABASE_URL`
+- `ROSSMANN_TRAIN_PATH` or `TRAIN_CSV_PATH`
+- `ROSSMANN_STORE_PATH` or `STORE_CSV_PATH`
+- `USE_STAGING` with default `true`
+- `UPSERT` with default `true`
+- `PROMOTE_AFTER_STAGING` with default `true`
+- `TRIGGERED_BY`
+- `LOG_LEVEL`
 
-```bash
-cd /home/azab-22/Desktop/DIPLOMA/data
-export DATABASE_URL="postgresql://user:pass@localhost:5432/sales_forecasting"
-export TRAIN_CSV_PATH="./train.csv"
-export STORE_CSV_PATH="./store.csv"
-export USE_STAGING="true"
-export TRIGGERED_BY="admin@example.com"
+## Local Validation
 
-python -m src.runs.run_ingestion
-```
-
-### Running Programmatically
-
-```python
-from src.runs.run_ingestion import run_ingestion
-
-run = run_ingestion(
-    train_csv_path="./train.csv",
-    store_csv_path="./store.csv",
-    database_url="postgresql://user:pass@localhost:5432/sales_forecasting",
-    use_staging=True,
-    upsert=True,
-    triggered_by="admin@example.com",
-)
-
-print(f"Run {run.run_id} completed with status: {run.status.value}")
-```
-
-## Ingestion Stages
-
-### 1. Read
-- Parses CSV files with type validation
-- Returns pandas DataFrames for processing
-- Handles missing values and parsing errors
-
-### 2. Validate
-- Checks structural integrity (required fields, types)
-- Checks logical consistency (e.g., sales when closed)
-- Flags outliers and duplicates
-- Records all issues with severity (error/warning/info)
-
-### 3. Transform
-- Normalizes data types and formats
-- Handles missing values with business rules
-- Removes invalid records
-- Maps columns to operational schema
-
-### 4. Load
-- Loads data into staging or base tables
-- Supports upsert (update existing, insert new)
-- Uses PostgreSQL ON CONFLICT for efficiency
-- Records load counts and failures
-
-## Validation Rules
-
-### Sales Records (train.csv)
-
-| Rule | Severity | Description |
-|-------|-----------|-------------|
-| Missing Store | Error | Store ID cannot be null |
-| Missing Date | Error | Date cannot be null |
-| Invalid Date Range | Error | Date must be between 2013-01-01 and 2015-12-31 |
-| Invalid Day of Week | Error | Must be 1-7 |
-| Negative Sales | Error | Sales cannot be negative |
-| Negative Customers | Error | Customers cannot be negative |
-| Sales When Closed | Error | Closed stores cannot have sales |
-| Customers When Closed | Error | Closed stores cannot have customers |
-| Zero Sales When Open | Warning | Open stores typically have sales |
-| Duplicate Store/Date | Error | Must be unique combination |
-| Extreme Sales (>40000) | Warning | Potential outlier |
-
-### Store Records (store.csv)
-
-| Rule | Severity | Description |
-|-------|-----------|-------------|
-| Missing Store ID | Error | Store ID cannot be null |
-| Invalid Store Type | Error | Must be a, b, c, or d |
-| Invalid Assortment | Error | Must be a, b, or c |
-| Negative Competition Distance | Error | Distance cannot be negative |
-| Invalid Promo2 Flag | Error | Must be 0 or 1 |
-| Incomplete Promo2 Dates | Error | When Promo2=1, require dates |
-| Duplicate Store ID | Error | Store ID must be unique |
-
-## Database Tables
-
-### internal.ingestion_runs
-Tracks each pipeline execution with:
-- Run ID (UUID)
-- Status (pending, running, validating, transforming, loading, completed, failed, cancelled)
-- Input file paths and record counts
-- Processing metrics
-- Error messages and tracebacks
-- Timestamps and duration
-
-### internal.ingestion_validation_results
-Aggregated validation results per table per run with:
-- Result ID
-- Run ID reference
-- Table name
-- Record counts (total, valid, error, warning)
-- Detailed issues/warnings as JSON
-
-### internal.ingestion_validation_issues
-Individual validation issues with:
-- Issue ID
-- Run ID and Result ID references
-- Issue type and severity
-- Table name and row identifier
-- Field name, actual/expected values
-- Message
-
-### internal.sales_operational_staging
-Staging table for sales records before promotion:
-- store_id, date, day_of_week
-- sales, customers, open
-- promo, state_holiday, school_holiday
-
-### internal.stores_operational_staging
-Staging table for store metadata before promotion:
-- store_id (primary key)
-- store_type, assortment
-- competition_distance, competition_open_since_month, competition_open_since_year
-- promo2, promo2_since_week, promo2_since_year, promo_interval
-
-## Testing
+Focused Phase 3 validation can be run from the repository root:
 
 ```bash
-cd data
-pytest tests/ -v
+pytest data/tests/integration/test_ingestion_success.py data/tests/integration/test_ingestion_failures.py -q
 ```
 
-### Test Structure
+The operator entrypoint can be executed directly with module syntax:
 
-```
-tests/
-├── unit/          # Unit tests for individual functions
-└── integration/   # Integration tests for the full pipeline
+```bash
+python -m data.src.runs.run_ingestion
 ```
 
-## Troubleshooting
+## Boundary Reminder
 
-### Common Issues
-
-**Issue**: File not found error
-```
-Solution: Verify TRAIN_CSV_PATH and STORE_CSV_PATH point to existing files
-```
-
-**Issue**: Database connection error
-```
-Solution: Verify DATABASE_URL is correct and database is accessible
-```
-
-**Issue**: Validation errors preventing load
-```
-Solution: Check the validation report for specific issues.
-Some errors (like extreme outliers) may be warnings that allow continuation.
-```
-
-**Issue**: Duplicate key errors during load
-```
-Solution: The pipeline should handle duplicates during validation.
-If errors persist, check source data for duplicate store/date combinations.
-```
-
-### Viewing Ingestion Results
-
-To view recent ingestion runs:
-
-```sql
-SELECT
-    run_id,
-    status,
-    started_at,
-    duration_seconds,
-    train_record_count,
-    store_record_count,
-    records_loaded,
-    total_error_count,
-    total_warning_count
-FROM internal.ingestion_runs
-ORDER BY started_at DESC
-LIMIT 10;
-```
-
-To view validation issues for a specific run:
-
-```sql
-SELECT
-    issue_type,
-    severity,
-    table_name,
-    row_identifier,
-    field_name,
-    message
-FROM internal.ingestion_validation_issues
-WHERE run_id = '<run-id>'
-ORDER BY severity, issue_type;
-```
-
-## Next Steps
-
-After data ingestion:
-1. Data is available in `internal.sales_operational` and `internal.stores_operational`
-2. Run KPI mart generation: `python -m src.marts.refresh_kpis`
-3. Train forecasting models: `python -m ml.src.training.train_baseline`
-4. Access data through backend API endpoints
-
-## Module Boundary
-
-This module **MUST NOT**:
-- Expose user-facing APIs (that's the backend's responsibility)
-- Perform authentication or authorization decisions
-- Bypass controlled Supabase schemas
-- Own frontend concerns
+- No frontend business logic belongs in this module.
+- No KPI marts or forecast outputs are produced here.
+- No direct client access to Supabase tables is introduced here.
+- All writes stay inside the controlled database boundary defined by the
+  approved architecture.

@@ -3,6 +3,15 @@ begin;
 create schema if not exists internal;
 create schema if not exists analytics;
 create schema if not exists ml;
+create schema if not exists auth;
+
+create or replace function auth.uid()
+returns uuid
+language sql
+stable
+as $$
+  select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid
+$$;
 
 revoke create on schema public from public;
 

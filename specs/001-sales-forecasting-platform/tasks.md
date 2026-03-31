@@ -57,18 +57,18 @@
 
 ### Tests for User Story 5
 
-- [ ] T019 [P] [US5] Add successful ingestion integration test in `data/tests/integration/test_ingestion_success.py`
-- [ ] T020 [P] [US5] Add validation-failure coverage for malformed input files in `data/tests/integration/test_ingestion_failures.py`
+- [X] T019 [P] [US5] Add successful ingestion integration test in `data/tests/integration/test_ingestion_success.py`
+- [X] T020 [P] [US5] Add validation-failure coverage for malformed input files in `data/tests/integration/test_ingestion_failures.py`
 
 ### Implementation for User Story 5
 
-- [ ] T021 [P] [US5] Create Rossmann raw dataset readers in `data/src/ingest/read_train_csv.py` and `data/src/ingest/read_store_csv.py`
-- [ ] T022 [P] [US5] Create structural and logical validation rules in `data/src/quality/validate_sales_records.py` and `data/src/quality/validate_store_records.py`
-- [ ] T023 [US5] Implement validation reporting and run-state models in `data/src/runs/models.py` and `data/src/runs/reporting.py`
-- [ ] T024 [US5] Implement cleaning and normalization flow in `data/src/transform/normalize_sales.py` and `data/src/transform/normalize_stores.py`
-- [ ] T025 [US5] Implement operational data loaders for staging and base tables in `data/src/load/load_operational_tables.py`
-- [ ] T026 [US5] Add ingestion run metadata migration and persistence logic in `supabase/migrations/20260311_004_ingestion_runs.sql` and `data/src/runs/persist_ingestion_run.py`
-- [ ] T027 [US5] Create repeatable ingestion entrypoint and operator documentation in `data/src/runs/run_ingestion.py` and `data/README.md`
+- [X] T021 [P] [US5] Create Rossmann raw dataset readers in `data/src/ingest/read_train_csv.py` and `data/src/ingest/read_store_csv.py`
+- [X] T022 [P] [US5] Create structural and logical validation rules in `data/src/quality/validate_sales_records.py` and `data/src/quality/validate_store_records.py`
+- [X] T023 [US5] Implement validation reporting and run-state models in `data/src/runs/models.py` and `data/src/runs/reporting.py`
+- [X] T024 [US5] Implement cleaning and normalization flow in `data/src/transform/normalize_sales.py` and `data/src/transform/normalize_stores.py`
+- [X] T025 [US5] Implement operational data loaders for staging and base tables in `data/src/load/load_operational_tables.py`
+- [X] T026 [US5] Add ingestion run metadata migration and persistence logic in `supabase/migrations/20260311_004_ingestion_runs.sql` and `data/src/runs/persist_ingestion_run.py`
+- [X] T027 [US5] Create repeatable ingestion entrypoint and operator documentation in `data/src/runs/run_ingestion.py` and `data/README.md`
 
 **Checkpoint**: Raw Rossmann data can be ingested, validated, normalized, and persisted repeatably
 
@@ -82,22 +82,22 @@
 
 ### Tests for User Story 1
 
-- [ ] T028 [P] [US1] Add KPI mart validation tests for daily, weekly, and monthly outputs in `data/tests/integration/test_kpi_marts.py`
-- [ ] T029 [P] [US1] Add backend contract tests for stores, sales, and KPI endpoints in `backend/tests/contract/test_stores_api.py` and `backend/tests/contract/test_kpis_api.py`
-- [ ] T030 [P] [US1] Add backend integration test for authorized dashboard access in `backend/tests/integration/test_dashboard_access.py`
-- [ ] T031 [P] [US1] Add frontend dashboard rendering test in `frontend/tests/dashboard/dashboard-page.test.tsx`
+- [X] T028 [P] [US1] Add KPI mart validation tests for daily, weekly, and monthly outputs in `data/tests/integration/test_kpi_marts.py`
+- [X] T029 [P] [US1] Add backend contract tests for stores, sales, and KPI endpoints in `backend/tests/contract/test_stores_api.py` and `backend/tests/contract/test_kpis_api.py`
+- [X] T030 [P] [US1] Add backend integration test for authorized dashboard access in `backend/tests/integration/test_dashboard_access.py`
+- [X] T031 [P] [US1] Add frontend dashboard rendering test in `frontend/tests/dashboard/dashboard-page.test.tsx`
 
 ### Implementation for User Story 1
 
-- [ ] T032 [P] [US1] Create KPI mart migrations in `supabase/migrations/20260311_005_kpi_daily.sql`, `supabase/migrations/20260311_006_kpi_weekly.sql`, and `supabase/migrations/20260311_007_kpi_monthly.sql`
-- [ ] T033 [P] [US1] Implement KPI mart builders and refresh workflow in `data/src/marts/build_daily_kpi.py`, `data/src/marts/build_periodic_kpis.py`, and `data/src/marts/refresh_kpis.py`
-- [ ] T034 [P] [US1] Create store, sales, and KPI repositories in `backend/src/repositories/store_repository.py`, `backend/src/repositories/sales_repository.py`, and `backend/src/repositories/kpi_repository.py`
-- [ ] T035 [P] [US1] Define store, sales, and KPI request-response schemas in `backend/src/schemas/stores.py`, `backend/src/schemas/sales.py`, and `backend/src/schemas/kpis.py`
-- [ ] T036 [US1] Implement store and KPI services with access-aware filtering in `backend/src/services/store_service.py` and `backend/src/services/kpi_service.py`
-- [ ] T037 [US1] Implement `/api/v1/stores`, `/api/v1/sales`, and base `/api/v1/kpis` routes in `backend/src/api/v1/stores.py`, `backend/src/api/v1/sales.py`, and `backend/src/api/v1/kpis.py`
-- [ ] T038 [P] [US1] Create frontend analytics API clients and dashboard page shell in `frontend/src/lib/api/stores.ts`, `frontend/src/lib/api/analytics.ts`, and `frontend/src/app/dashboard/page.tsx`
-- [ ] T039 [US1] Implement store selection, date filtering, and historical chart components in `frontend/src/features/dashboard/store-dashboard.tsx`, `frontend/src/features/dashboard/store-filter-form.tsx`, and `frontend/src/components/charts/sales-history-chart.tsx`
-- [ ] T040 [US1] Add analytics-specific logging and dashboard error states in `backend/src/observability/analytics_logging.py` and `frontend/src/features/dashboard/dashboard-error-state.tsx`
+- [X] T032 [P] [US1] Create KPI mart migrations in `supabase/migrations/20260311_005_kpi_daily.sql`, `supabase/migrations/20260311_006_kpi_weekly.sql`, and `supabase/migrations/20260311_007_kpi_monthly.sql`
+- [X] T033 [P] [US1] Implement KPI mart builders and refresh workflow in `data/src/marts/build_daily_kpi.py`, `data/src/marts/build_periodic_kpis.py`, and `data/src/marts/refresh_kpis.py`
+- [X] T034 [P] [US1] Create store, sales, and KPI repositories in `backend/src/repositories/store_repository.py`, `backend/src/repositories/sales_repository.py`, and `backend/src/repositories/kpi_repository.py`
+- [X] T035 [P] [US1] Define store, sales, and KPI request-response schemas in `backend/src/schemas/stores.py`, `backend/src/schemas/sales.py`, and `backend/src/schemas/kpis.py`
+- [X] T036 [US1] Implement store and KPI services with access-aware filtering in `backend/src/services/store_service.py` and `backend/src/services/kpi_service.py`
+- [X] T037 [US1] Implement `/api/v1/stores`, `/api/v1/sales`, and base `/api/v1/kpis` routes in `backend/src/api/v1/stores.py`, `backend/src/api/v1/sales.py`, and `backend/src/api/v1/kpis.py`
+- [X] T038 [P] [US1] Create frontend analytics API clients and dashboard page shell in `frontend/src/lib/api/stores.ts`, `frontend/src/lib/api/analytics.ts`, and `frontend/src/app/dashboard/page.tsx`
+- [X] T039 [US1] Implement store selection, date filtering, and historical chart components in `frontend/src/features/dashboard/store-dashboard.tsx`, `frontend/src/features/dashboard/store-filter-form.tsx`, and `frontend/src/components/charts/sales-history-chart.tsx`
+- [X] T040 [US1] Add analytics-specific logging and dashboard error states in `backend/src/observability/analytics_logging.py` and `frontend/src/features/dashboard/dashboard-error-state.tsx`
 
 **Checkpoint**: User Story 1 is independently functional and demoable as the MVP dashboard
 
@@ -111,24 +111,24 @@
 
 ### Tests for User Story 2
 
-- [ ] T041 [P] [US2] Add feature-generation and baseline-model tests in `ml/tests/test_feature_generation.py` and `ml/tests/test_baseline_model.py`
-- [ ] T042 [P] [US2] Add model evaluation and low-data fallback tests in `ml/tests/test_model_evaluation.py` and `ml/tests/test_low_data_fallback.py`
-- [ ] T043 [P] [US2] Add backend contract and integration tests for forecast retrieval in `backend/tests/contract/test_forecasts_api.py` and `backend/tests/integration/test_forecast_access.py`
-- [ ] T044 [P] [US2] Add frontend forecast page tests in `frontend/tests/forecasts/forecast-page.test.tsx`
+- [X] T041 [P] [US2] Add feature-generation and baseline-model tests in `ml/tests/test_feature_generation.py` and `ml/tests/test_baseline_model.py`
+- [X] T042 [P] [US2] Add model evaluation and low-data fallback tests in `ml/tests/test_model_evaluation.py` and `ml/tests/test_low_data_fallback.py`
+- [X] T043 [P] [US2] Add backend contract and integration tests for forecast retrieval in `backend/tests/contract/test_forecasts_api.py` and `backend/tests/integration/test_forecast_access.py`
+- [X] T044 [P] [US2] Add frontend forecast page tests in `frontend/tests/forecasts/forecast-page.test.tsx`
 
 ### Implementation for User Story 2
 
-- [ ] T045 [P] [US2] Create ML metadata and forecast output migrations in `supabase/migrations/20260311_008_ml_metadata.sql` and `supabase/migrations/20260311_009_forecast_results.sql`
-- [ ] T046 [P] [US2] Implement forecast feature preparation in `ml/src/features/build_forecast_features.py`
-- [ ] T047 [P] [US2] Implement baseline training and fallback publication in `ml/src/training/train_baseline.py` and `ml/src/publishing/publish_baseline_forecasts.py`
-- [ ] T048 [P] [US2] Implement Prophet and XGBoost training workflows in `ml/src/training/train_prophet.py` and `ml/src/training/train_xgboost.py`
-- [ ] T049 [US2] Implement model evaluation, selection, and active-model publication in `ml/src/evaluation/evaluate_models.py`, `ml/src/evaluation/select_active_model.py`, and `ml/src/publishing/publish_model_metadata.py`
-- [ ] T050 [US2] Implement forecast publication and artifact reference persistence in `ml/src/publishing/publish_forecasts.py` and `ml/src/publishing/publish_artifacts.py`
-- [ ] T051 [P] [US2] Create forecast repository and response schemas in `backend/src/repositories/forecast_repository.py` and `backend/src/schemas/forecasts.py`
-- [ ] T052 [US2] Implement forecast service and `/api/v1/forecasts` route in `backend/src/services/forecast_service.py` and `backend/src/api/v1/forecasts.py`
-- [ ] T053 [P] [US2] Create frontend forecast API client and chart components in `frontend/src/lib/api/forecasts.ts` and `frontend/src/components/charts/forecast-chart.tsx`
-- [ ] T054 [US2] Implement forecast page, accuracy summary, and warning states in `frontend/src/app/forecasts/page.tsx` and `frontend/src/features/forecasts/forecast-view.tsx`
-- [ ] T055 [US2] Document forecast publication and model metadata expectations in `ml/README.md` and `docs/api/forecasts.md`
+- [X] T045 [P] [US2] Create ML metadata and forecast output migrations in `supabase/migrations/20260311_008_ml_metadata.sql` and `supabase/migrations/20260311_009_forecast_results.sql`
+- [X] T046 [P] [US2] Implement forecast feature preparation in `ml/src/features/build_forecast_features.py`
+- [X] T047 [P] [US2] Implement baseline training and fallback publication in `ml/src/training/train_baseline.py` and `ml/src/publishing/publish_baseline_forecasts.py`
+- [X] T048 [P] [US2] Implement Prophet and XGBoost training workflows in `ml/src/training/train_prophet.py` and `ml/src/training/train_xgboost.py`
+- [X] T049 [US2] Implement model evaluation, selection, and active-model publication in `ml/src/evaluation/evaluate_models.py`, `ml/src/evaluation/select_active_model.py`, and `ml/src/publishing/publish_model_metadata.py`
+- [X] T050 [US2] Implement forecast publication and artifact reference persistence in `ml/src/publishing/publish_forecasts.py` and `ml/src/publishing/publish_artifacts.py`
+- [X] T051 [P] [US2] Create forecast repository and response schemas in `backend/src/repositories/forecast_repository.py` and `backend/src/schemas/forecasts.py`
+- [X] T052 [US2] Implement forecast service and `/api/v1/forecasts` route in `backend/src/services/forecast_service.py` and `backend/src/api/v1/forecasts.py`
+- [X] T053 [P] [US2] Create frontend forecast API client and chart components in `frontend/src/lib/api/forecasts.ts` and `frontend/src/components/charts/forecast-chart.tsx`
+- [X] T054 [US2] Implement forecast page, accuracy summary, and warning states in `frontend/src/app/forecasts/page.tsx` and `frontend/src/features/forecasts/forecast-view.tsx`
+- [X] T055 [US2] Document forecast publication and model metadata expectations in `ml/README.md` and `docs/api/forecasts.md`
 
 **Checkpoint**: User Story 2 is independently functional with governed forecast retrieval and fallback behavior
 

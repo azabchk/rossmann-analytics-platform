@@ -26,3 +26,9 @@ class CurrentUserResponse(BaseModel):
     user_id: str
     email: EmailStr | None = None
     role: str
+
+
+class PaginatedResponse(BaseModel):
+    total: int = Field(..., ge=0)
+    offset: int = Field(..., ge=0)
+    limit: int = Field(..., ge=1)

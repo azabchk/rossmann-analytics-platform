@@ -1,196 +1,167 @@
--- Migration: Ingestion Run Metadata Tables
--- Description: Creates tables to track ingestion pipeline runs and validation results
--- Schema: internal (for pipeline metadata)
--- Dependencies: 20260311_001_base_schemas.sql
+begin;
 
--- Enable UUID extension if not already enabled
-CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+create extension if not exists "pgcrypto";
 
--- Ingestion runs table
--- Tracks each execution of the data ingestion pipeline
-CREATE TABLE IF NOT EXISTS internal.ingestion_runs (
-    run_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    status VARCHAR(50) NOT NULL CHECK (status IN (
-        'pending', 'running', 'validating', 'transforming', 'loading',
-        'completed', 'failed', 'cancelled'
-    )),
+alter table if exists internal.stores
+  add column if not exists competition_open_since_month integer,
+  add column if not exists competition_open_since_year integer,
+  add column if not exists promo2_since_week integer,
+  add column if not exists promo2_since_year integer,
+  add column if not exists promo_interval text;
 
-    -- Input information
-    train_csv_path TEXT,
-    store_csv_path TEXT,
-    train_record_count INTEGER DEFAULT 0,
-    store_record_count INTEGER DEFAULT 0,
+alter table if exists internal.sales_records
+  add column if not exists day_of_week integer;
 
-    -- Processing metrics
-    records_normalized INTEGER DEFAULT 0,
-    records_loaded INTEGER DEFAULT 0,
-    records_failed INTEGER DEFAULT 0,
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint where conname = 'stores_competition_open_since_month_check'
+  ) then
+    alter table internal.stores
+      add constraint stores_competition_open_since_month_check
+      check (
+        competition_open_since_month is null
+        or competition_open_since_month between 1 and 12
+      );
+  end if;
 
-    -- Error handling
-    error_message TEXT,
-    error_traceback TEXT,
+  if not exists (
+    select 1 from pg_constraint where conname = 'stores_promo2_since_week_check'
+  ) then
+    alter table internal.stores
+      add constraint stores_promo2_since_week_check
+      check (
+        promo2_since_week is null
+        or promo2_since_week between 1 and 52
+      );
+  end if;
 
-    -- Metadata
-    triggered_by TEXT,
-    parameters JSONB DEFAULT '{}'::jsonb,
+  if not exists (
+    select 1 from pg_constraint where conname = 'sales_records_day_of_week_check'
+  ) then
+    alter table internal.sales_records
+      add constraint sales_records_day_of_week_check
+      check (day_of_week between 1 and 7);
+  end if;
+end $$;
 
-    -- Timestamps
-    started_at TIMESTAMPTZ,
-    completed_at TIMESTAMPTZ,
-    duration_seconds NUMERIC(10, 2),
-
-    -- Summary flags
-    has_validation_errors BOOLEAN DEFAULT FALSE,
-    total_error_count INTEGER DEFAULT 0,
-    total_warning_count INTEGER DEFAULT 0,
-
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW()
+create table if not exists internal.ingestion_runs (
+  run_id uuid primary key default gen_random_uuid(),
+  status text not null check (
+    status in ('pending', 'running', 'validating', 'transforming', 'loading', 'completed', 'failed', 'cancelled')
+  ),
+  train_csv_path text,
+  store_csv_path text,
+  train_record_count integer not null default 0,
+  store_record_count integer not null default 0,
+  records_normalized integer not null default 0,
+  records_loaded integer not null default 0,
+  records_failed integer not null default 0,
+  error_message text,
+  error_traceback text,
+  triggered_by text,
+  parameters jsonb not null default '{}'::jsonb,
+  started_at timestamptz,
+  completed_at timestamptz,
+  duration_seconds numeric(12, 3),
+  has_validation_errors boolean not null default false,
+  total_error_count integer not null default 0,
+  total_warning_count integer not null default 0,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now())
 );
 
--- Indexes for common queries
-CREATE INDEX IF NOT EXISTS idx_ingestion_runs_status ON internal.ingestion_runs(status);
-CREATE INDEX IF NOT EXISTS idx_ingestion_runs_started_at ON internal.ingestion_runs(started_at DESC);
-CREATE INDEX IF NOT EXISTS idx_ingestion_runs_triggered_by ON internal.ingestion_runs(triggered_by);
+create index if not exists idx_ingestion_runs_status on internal.ingestion_runs(status);
+create index if not exists idx_ingestion_runs_started_at on internal.ingestion_runs(started_at desc);
 
--- Function to update updated_at timestamp
-CREATE OR REPLACE FUNCTION internal.update_ingestion_runs_updated_at()
-RETURNS TRIGGER AS $$
-BEGIN
-    NEW.updated_at = NOW();
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
--- Trigger to auto-update updated_at
-DROP TRIGGER IF EXISTS ingestion_runs_updated_at ON internal.ingestion_runs;
-CREATE TRIGGER ingestion_runs_updated_at
-    BEFORE UPDATE ON internal.ingestion_runs
-    FOR EACH ROW
-    EXECUTE FUNCTION internal.update_ingestion_runs_updated_at();
-
-
--- Table validation results table
--- Stores aggregated validation results per table per run
-CREATE TABLE IF NOT EXISTS internal.ingestion_validation_results (
-    result_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    run_id UUID NOT NULL REFERENCES internal.ingestion_runs(run_id) ON DELETE CASCADE,
-
-    -- Table information
-    table_name VARCHAR(100) NOT NULL,
-
-    -- Summary counts
-    total_records INTEGER DEFAULT 0,
-    valid_records INTEGER DEFAULT 0,
-    error_count INTEGER DEFAULT 0,
-    warning_count INTEGER DEFAULT 0,
-
-    -- Detailed results stored as JSON
-    issues JSONB DEFAULT '[]'::jsonb,
-    warnings JSONB DEFAULT '[]'::jsonb,
-
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-
-    CONSTRAINT unique_run_table UNIQUE (run_id, table_name)
+create table if not exists internal.ingestion_validation_results (
+  result_id uuid primary key default gen_random_uuid(),
+  run_id uuid not null references internal.ingestion_runs(run_id) on delete cascade,
+  table_name text not null,
+  total_records integer not null default 0,
+  valid_records integer not null default 0,
+  error_count integer not null default 0,
+  warning_count integer not null default 0,
+  issues jsonb not null default '[]'::jsonb,
+  warnings jsonb not null default '[]'::jsonb,
+  created_at timestamptz not null default timezone('utc', now()),
+  unique (run_id, table_name)
 );
 
--- Indexes for querying validation results
-CREATE INDEX IF NOT EXISTS idx_ingestion_validation_results_run_id ON internal.ingestion_validation_results(run_id);
-CREATE INDEX IF NOT EXISTS idx_ingestion_validation_results_table_name ON internal.ingestion_validation_results(table_name);
-
-
--- Validation issues detail table
--- Stores individual validation issues for detailed reporting
-CREATE TABLE IF NOT EXISTS internal.ingestion_validation_issues (
-    issue_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    result_id UUID NOT NULL REFERENCES internal.ingestion_validation_results(result_id) ON DELETE CASCADE,
-    run_id UUID NOT NULL REFERENCES internal.ingestion_runs(run_id) ON DELETE CASCADE,
-
-    -- Issue classification
-    issue_type VARCHAR(50) NOT NULL,
-    severity VARCHAR(20) NOT NULL CHECK (severity IN ('error', 'warning', 'info')),
-
-    -- Issue location
-    table_name VARCHAR(100) NOT NULL,
-    row_identifier TEXT,
-    field_name TEXT,
-
-    -- Issue details
-    actual_value TEXT,
-    expected_value TEXT,
-    message TEXT NOT NULL,
-
-    created_at TIMESTAMPTZ DEFAULT NOW()
+create table if not exists internal.ingestion_validation_issues (
+  issue_id uuid primary key default gen_random_uuid(),
+  result_id uuid not null references internal.ingestion_validation_results(result_id) on delete cascade,
+  run_id uuid not null references internal.ingestion_runs(run_id) on delete cascade,
+  issue_type text not null,
+  severity text not null check (severity in ('error', 'warning', 'info')),
+  table_name text not null,
+  row_identifier text,
+  field_name text,
+  actual_value text,
+  expected_value text,
+  message text not null,
+  created_at timestamptz not null default timezone('utc', now())
 );
 
--- Indexes for querying validation issues
-CREATE INDEX IF NOT EXISTS idx_ingestion_validation_issues_run_id ON internal.ingestion_validation_issues(run_id);
-CREATE INDEX IF NOT EXISTS idx_ingestion_validation_issues_table_name ON internal.ingestion_validation_issues(table_name);
-CREATE INDEX IF NOT EXISTS idx_ingestion_validation_issues_severity ON internal.ingestion_validation_issues(severity);
-CREATE INDEX IF NOT EXISTS idx_ingestion_validation_issues_issue_type ON internal.ingestion_validation_issues(issue_type);
+create index if not exists idx_ingestion_validation_results_run_id
+  on internal.ingestion_validation_results(run_id);
+create index if not exists idx_ingestion_validation_issues_run_id
+  on internal.ingestion_validation_issues(run_id);
+create index if not exists idx_ingestion_validation_issues_severity
+  on internal.ingestion_validation_issues(severity);
 
-
--- Operational staging tables
--- These are staging versions of the operational data tables
--- They are loaded first, validated, then promoted to production
-
--- Sales operational staging table
-CREATE TABLE IF NOT EXISTS internal.sales_operational_staging (
-    id BIGSERIAL PRIMARY KEY,
-    store_id INTEGER NOT NULL,
-    date DATE NOT NULL,
-    day_of_week INTEGER NOT NULL CHECK (day_of_week BETWEEN 1 AND 7),
-    sales NUMERIC(10, 2) NOT NULL CHECK (sales >= 0),
-    customers INTEGER NOT NULL CHECK (customers >= 0),
-    open INTEGER NOT NULL CHECK (open IN (0, 1)),
-    promo INTEGER NOT NULL CHECK (promo IN (0, 1)),
-    state_holiday VARCHAR(10) NOT NULL DEFAULT '0',
-    school_holiday INTEGER NOT NULL CHECK (school_holiday IN (0, 1)),
-
-    -- Metadata
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW()
+create table if not exists internal.stores_staging (
+  store_id integer primary key,
+  store_type text not null check (store_type in ('A', 'B', 'C', 'D')),
+  assortment text not null check (assortment in ('a', 'b', 'c')),
+  competition_distance integer not null check (competition_distance >= 0),
+  competition_open_since_month integer null check (
+    competition_open_since_month is null
+    or competition_open_since_month between 1 and 12
+  ),
+  competition_open_since_year integer null,
+  promo2 boolean not null default false,
+  promo2_since_week integer null check (
+    promo2_since_week is null
+    or promo2_since_week between 1 and 52
+  ),
+  promo2_since_year integer null,
+  promo_interval text null,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now())
 );
 
--- Unique constraint for sales records
-CREATE UNIQUE INDEX IF NOT EXISTS idx_sales_operational_staging_unique
-    ON internal.sales_operational_staging(store_id, date);
-
--- Performance indexes
-CREATE INDEX IF NOT EXISTS idx_sales_operational_staging_store_id
-    ON internal.sales_operational_staging(store_id);
-CREATE INDEX IF NOT EXISTS idx_sales_operational_staging_date
-    ON internal.sales_operational_staging(date);
-
-
--- Stores operational staging table
-CREATE TABLE IF NOT EXISTS internal.stores_operational_staging (
-    store_id INTEGER PRIMARY KEY,
-    store_type VARCHAR(10),
-    assortment VARCHAR(10),
-    competition_distance NUMERIC(10, 2),
-    competition_open_since_month INTEGER CHECK (competition_open_since_month BETWEEN 1 AND 12),
-    competition_open_since_year INTEGER,
-    promo2 INTEGER NOT NULL CHECK (promo2 IN (0, 1)),
-    promo2_since_week INTEGER CHECK (promo2_since_week BETWEEN 1 AND 53),
-    promo2_since_year INTEGER,
-    promo_interval TEXT,
-
-    -- Metadata
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW()
+create table if not exists internal.sales_records_staging (
+  sales_record_id bigserial primary key,
+  store_id integer not null references internal.stores_staging(store_id) on delete cascade,
+  sales_date date not null,
+  day_of_week integer not null check (day_of_week between 1 and 7),
+  sales integer not null check (sales >= 0),
+  customers integer null check (customers is null or customers >= 0),
+  is_open boolean not null,
+  promo boolean not null,
+  state_holiday text null,
+  school_holiday boolean not null,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  unique (store_id, sales_date)
 );
 
--- Performance indexes
-CREATE INDEX IF NOT EXISTS idx_stores_operational_staging_store_type
-    ON internal.stores_operational_staging(store_type);
-CREATE INDEX IF NOT EXISTS idx_stores_operational_staging_promo2
-    ON internal.stores_operational_staging(promo2);
+create index if not exists idx_stores_store_type on internal.stores(store_type);
+create index if not exists idx_stores_staging_store_type on internal.stores_staging(store_type);
+create index if not exists idx_sales_records_staging_store_date
+  on internal.sales_records_staging(store_id, sales_date);
 
+comment on table internal.ingestion_runs is 'Run-level metadata for Rossmann ingestion executions.';
+comment on table internal.ingestion_validation_results is 'Aggregated validation outcome per logical table.';
+comment on table internal.ingestion_validation_issues is 'Detailed validation issues per ingestion run.';
+comment on table internal.stores_staging is 'Restricted staging table for normalized store metadata.';
+comment on table internal.sales_records_staging is 'Restricted staging table for normalized sales records.';
+comment on column internal.stores.competition_open_since_month is 'Normalized competitor opening month from Rossmann store.csv.';
+comment on column internal.stores.competition_open_since_year is 'Normalized competitor opening year from Rossmann store.csv.';
+comment on column internal.stores.promo2_since_week is 'Normalized Promo2 start week from Rossmann store.csv.';
+comment on column internal.stores.promo2_since_year is 'Normalized Promo2 start year from Rossmann store.csv.';
+comment on column internal.stores.promo_interval is 'Normalized Promo2 interval string from Rossmann store.csv.';
+comment on column internal.sales_records.day_of_week is 'ISO weekday derived from the sales_date column.';
 
--- Comments for documentation
-COMMENT ON TABLE internal.ingestion_runs IS 'Tracks each execution of the data ingestion pipeline';
-COMMENT ON TABLE internal.ingestion_validation_results IS 'Stores aggregated validation results per table per run';
-COMMENT ON TABLE internal.ingestion_validation_issues IS 'Stores individual validation issues for detailed reporting';
-COMMENT ON TABLE internal.sales_operational_staging IS 'Staging table for sales records before promotion to production';
-COMMENT ON TABLE internal.stores_operational_staging IS 'Staging table for store metadata before promotion to production';
+commit;

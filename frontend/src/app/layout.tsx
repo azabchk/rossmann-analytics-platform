@@ -24,6 +24,12 @@ export default function RootLayout({ children }: RootLayoutProps) {
               <li>
                 <Link href="/login">Login</Link>
               </li>
+              <li>
+                <Link href="/dashboard">Dashboard</Link>
+              </li>
+              <li>
+                <Link href="/forecasts">Forecasts</Link>
+              </li>
             </ul>
           </nav>
         </header>
